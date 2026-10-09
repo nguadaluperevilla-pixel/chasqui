@@ -1,5 +1,5 @@
 // Chasqui Central · guarda la app en el celular para que abra rápido aunque la señal sea mala.
-const CACHE = 'chasqui-0defb2793a';
+const CACHE = 'chasqui-e7f6ebf80d';
 const BASE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(BASE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

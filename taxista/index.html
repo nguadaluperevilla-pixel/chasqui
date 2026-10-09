@@ -222,6 +222,15 @@ dialog.hojita::backdrop{background:rgba(10,20,14,.55)}
       <input type="password" id="eClave" autocomplete="current-password" required minlength="6">
       <p class="error" id="eError" role="alert"></p>
       <button class="primario" type="submit">Entrar</button>
+      <p class="nota" style="text-align:center;margin-top:14px"><button type="button" class="enlace" id="olvide">¿Olvidaste tu clave?</button></p>
+    </form>
+
+    <form id="fNueva" hidden>
+      <h3 class="sub">Crea tu nueva clave</h3>
+      <label class="campo" for="nClave">Nueva clave (mínimo 6)</label>
+      <input type="password" id="nClave" autocomplete="new-password" required minlength="6">
+      <p class="error" id="nError" role="alert"></p>
+      <button class="primario" type="submit">Guardar mi nueva clave</button>
     </form>
 
     <form id="fUnirme" hidden autocomplete="on">
@@ -361,6 +370,7 @@ dialog.hojita::backdrop{background:rgba(10,20,14,.55)}
       <li><button id="mReservas">Viajes largos reservados</button></li>
       <li><button id="mCaja">Caja Chasqui (Bluetooth)</button></li>
       <li><button id="mPrueba">Modo prueba (estoy fuera de Chachapoyas)</button></li>
+      <li><button id="mClave">Cambiar mi clave</button></li>
       <li><a href="../preview.html#nosotros">Quiénes somos · ⟨c|τ⟩</a></li>
       <li><button id="mSalir">Cerrar sesión</button></li>
     </ul>
@@ -400,6 +410,18 @@ dialog.hojita::backdrop{background:rgba(10,20,14,.55)}
   <div class="hojita-cuerpo">
     <p class="nota" id="resAutorizacion"></p>
     <ul class="lista-viajes" id="listaReservas"></ul>
+  </div>
+</dialog>
+
+<dialog class="hojita" id="dClave" aria-labelledby="tClave">
+  <div class="hojita-cab"><h2 id="tClave">Mi clave</h2><button class="x" data-cerrar aria-label="Cerrar">✕</button></div>
+  <div class="hojita-cuerpo">
+    <form id="fClave">
+      <p class="nota">Si la central te dio una clave temporal, cámbiala aquí por una que recuerdes.</p>
+      <label class="campo" for="cClaveNueva">Nueva clave (mínimo 6)</label>
+      <input type="password" id="cClaveNueva" autocomplete="new-password" required minlength="6">
+      <button class="primario" type="submit">Cambiar mi clave</button>
+    </form>
   </div>
 </dialog>
 
@@ -1583,6 +1605,31 @@ globalThis.CHASQUI_CONFIG = {
     abrir('dMenu');
   });
   $('mCaja').addEventListener('click', () => { $('dMenu').close(); abrir('dCaja'); });
+  $('mClave').addEventListener('click', () => { $('dMenu').close(); abrir('dClave'); });
+  $('fClave').addEventListener('submit', async e => {
+    e.preventDefault();
+    const { error } = await sb.auth.updateUser({ password: $('cClaveNueva').value });
+    aviso(error ? (error.message || 'No se pudo cambiar') : 'Listo: tu clave cambió');
+    if (!error) { $('cClaveNueva').value = ''; $('dClave').close(); }
+  });
+  // ¿Olvidaste tu clave? Se intenta por correo; si no llega, la central da una clave temporal.
+  $('olvide').addEventListener('click', async () => {
+    const correo = $('eCorreo').value.trim();
+    if (!correo) { $('eError').textContent = 'Escribe tu correo arriba y vuelve a tocar "¿Olvidaste tu clave?".'; return; }
+    const { error } = await sb.auth.resetPasswordForEmail(correo, { redirectTo: location.origin + location.pathname });
+    $('eError').textContent = (error ? '' : 'Si tu correo está registrado, te llega un enlace para crear tu nueva clave. ') +
+      'Si no te llega en unos minutos, llama a la central: te dan una clave temporal por teléfono.';
+  });
+  $('fNueva').addEventListener('submit', async e => {
+    e.preventDefault();
+    const { error } = await sb.auth.updateUser({ password: $('nClave').value });
+    if (error) { $('nError').textContent = error.message; return; }
+    history.replaceState(null, '', location.pathname);
+    $('fNueva').hidden = true; st.recuperando = false; arrancar();
+  });
+  st.recuperando = /type=recovery/.test(location.hash);
+  sb.auth.onAuthStateChange(ev => { if (ev === 'PASSWORD_RECOVERY') { st.recuperando = true; mostrarNuevaClave(); } });
+  function mostrarNuevaClave() { $('entrada').hidden = false; $('fEntrar').hidden = true; $('fUnirme').hidden = true; $('fNueva').hidden = false; document.querySelector('.pestanas').hidden = true; }
   $('mPrueba').addEventListener('click', () => {
     $('dMenu').close();
     if (st.modoPrueba) { modoPrueba(false); pedirGps(); }
@@ -1674,6 +1721,8 @@ globalThis.CHASQUI_CONFIG = {
   let latido = 0, lento = 0;
   async function arrancar() {
     if (!sb) { aviso('No se pudo cargar la conexión. Revisa tu internet.', 6000); return; }
+    if (st.recuperando) { mostrarNuevaClave(); return; }
+    document.querySelector('.pestanas').hidden = false;
     const { data } = await sb.auth.getSession();
     if (!data.session) { $('entrada').hidden = false; pestana('entrar'); return; }
     st.yo = data.session.user.id;
