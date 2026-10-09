@@ -265,6 +265,7 @@ dialog.hojita::backdrop{background:rgba(10,20,14,.55)}
       <label class="campo" for="uClave">Crea una clave (mínimo 6)</label>
       <input type="password" id="uClave" autocomplete="new-password" required minlength="6">
       <p class="nota">La central revisa tu DNI, tu licencia y la autorización municipal de tu taxi antes de activarte.</p>
+      <p class="nota">Mientras estés conectado, la app guarda tu recorrido para mejorar las rutas, los tiempos y el mapa de la ciudad. Solo lo ve la central, y en los estudios va sin tu nombre. Al enviar tu solicitud aceptas esto.</p>
       <p class="error" id="uError" role="alert"></p>
       <button class="primario" type="submit">Enviar solicitud</button>
     </form>
@@ -1308,6 +1309,7 @@ globalThis.CHASQUI_CONFIG = {
     vigia = navigator.geolocation.watchPosition(p => {
       if (st.fuentePos === 'caja' || st.fuentePos === 'prueba') return;
       nuevaPos([p.coords.latitude, p.coords.longitude], 'gps');
+      if (!st.modoPrueba) anotarPunto(p.coords.latitude, p.coords.longitude, p.coords.speed != null ? p.coords.speed * 3.6 : null, p.coords.accuracy, 'celular');
     }, err => { if (!st.pos) modoPrueba(true, err.code === 1 ? 'Sin permiso de ubicación: toca el mapa para decir dónde está tu taxi' : 'Sin GPS: toca el mapa para decir dónde está tu taxi'); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
   }
   function nuevaPos(pos, fuente) {
@@ -1592,8 +1594,36 @@ globalThis.CHASQUI_CONFIG = {
     const chip = $('cajaChip'); chip.hidden = false;
     chip.innerHTML = '';
     chip.append('Caja · ', Object.assign(document.createElement('b'), { textContent: j.e === 'OCUPADO' ? 'S/ ' + Number(j.s).toFixed(2) : 'Libre' }), j.e === 'OCUPADO' ? ' · ' + Number(j.km).toFixed(2) + ' km' : '', j.fix ? '' : ' · sin GPS');
-    if (j.fix && j.lat != null && st.fuentePos !== 'prueba') nuevaPos([j.lat, j.lon], 'caja');
+    if (j.fix && j.lat != null && st.fuentePos !== 'prueba') { nuevaPos([j.lat, j.lon], 'caja'); anotarPunto(j.lat, j.lon, j.v != null ? Number(j.v) : null, null, 'caja'); }
   }
+
+  /* ---------- recorridos: con ellos la app aprende calles nuevas, velocidades reales y dónde hay tráfico ----------
+     Solo mientras está conectado o en carrera; un punto cada 15 m o 20 s; se envían en paquetes cada 30 s. */
+  const traza = [];
+  let ultimoPunto = null;
+  function anotarPunto(lat, lon, velKmh, prec, fuente) {
+    if (!(st.conectado || st.viajes.length) || !st.taxista || !st.taxista.aprobado) return;
+    if (prec != null && prec > 50) return;   // GPS poco preciso: no enseña nada
+    const ahora = Date.now();
+    if (ultimoPunto && C.haversine([ultimoPunto.lat, ultimoPunto.lon], [lat, lon]) < 15 && ahora - ultimoPunto.ms < 20000) return;
+    const estado = estadoServidor();
+    if (estado === 'fuera') return;
+    ultimoPunto = { lat, lon, ms: ahora };
+    traza.push({ t: new Date(ahora).toISOString(), lat: +lat.toFixed(6), lon: +lon.toFixed(6),
+      vel: velKmh != null && isFinite(velKmh) ? +velKmh.toFixed(1) : null, prec: prec != null ? Math.round(prec) : null, estado, fuente });
+    if (traza.length > 1500) traza.splice(0, traza.length - 1500);   // sin señal mucho rato: se guardan los últimos
+  }
+  let enviandoTraza = false;
+  async function enviarTraza() {
+    if (enviandoTraza || !traza.length) return;
+    enviandoTraza = true;
+    const paquete = traza.splice(0, 200);
+    try { const { error } = await sb.rpc('guardar_traza', { p_puntos: paquete }); if (error) throw error; }
+    catch { traza.unshift(...paquete); }   // sin señal: se reintenta después
+    finally { enviandoTraza = false; }
+  }
+  setInterval(enviarTraza, 30000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') enviarTraza(); });
   $('btnCaja').addEventListener('click', conectarCaja);
 
   /* ---------- menú ---------- */
