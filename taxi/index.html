@@ -129,7 +129,10 @@ h2{font-family:var(--font-display);font-weight:800;font-size:clamp(26px,4.4vw,34
         <div class="campo-placa">
           <label for="placa">Código del taxi (su placa)</label>
           <input id="placa" value="M2R-392" maxlength="8" autocomplete="off" spellcheck="false">
-          <small>Va pintado en negro en el techo (30 × 20 cm) y en las dos puertas de atrás (30 × 10 cm).</small>
+          <small>Va pintado en negro en el techo (30 × 20 cm, art. 40.1.7) y en las dos puertas de atrás (30 × 10 cm, art. 40.1.2).</small>
+          <label for="numero" style="margin-top:10px">Número de taxi (registro municipal)</label>
+          <input id="numero" value="001" maxlength="6" autocomplete="off" spellcheck="false" style="font-size:24px">
+          <small>Va en negro debajo del escudo de Chachapoyas, en las puertas delanteras (3 × 15 cm, art. 40.1.9).</small>
         </div>
         <div class="vistas" role="group" aria-label="Ángulo de vista">
           <button data-v="tres" aria-pressed="true">3/4</button>
@@ -151,8 +154,8 @@ h2{font-family:var(--font-display);font-weight:800;font-size:clamp(26px,4.4vw,34
 
   <section aria-labelledby="tMarcas">
     <span class="lbl">Lo que pide la municipalidad</span>
-    <h2 id="tMarcas">Las 9 marcas del taxi de Chachapoyas</h2>
-    <p class="bajada">Son los elementos que la Sub Gerencia de Transportes y Circulación Vial muestra en su guía, con las medidas del artículo 40 de la ordenanza. Toca «Ver en el carro» y el modelo te lo enseña.</p>
+    <h2 id="tMarcas">Las marcas del taxi de Chachapoyas</h2>
+    <p class="bajada">Las 9 de la guía de la Sub Gerencia de Transportes y Circulación Vial, más el número de taxi y el sticker que pide el artículo 40 de la Ordenanza 302-2025-MPCH. Toca «Ver en el carro» y el modelo te lo enseña.</p>
     <ul class="marcas" id="marcas"></ul>
   </section>
 
@@ -189,7 +192,7 @@ h2{font-family:var(--font-display);font-weight:800;font-size:clamp(26px,4.4vw,34
 
   <footer class="fuentes">
     <p><b>De dónde sale cada cosa.</b> Colores, medidas y lugares de las marcas: Ordenanza Municipal 302-2025-MPCH (art. 40) y la guía «Elementos con los que debe contar un taxi» de la Sub Gerencia de Transportes y Circulación Vial de la Municipalidad Provincial de Chachapoyas. Medidas del carro: Chevrolet Sail sedán 2013 (4,249 × 1,690 × 1,505 m; 2,465 m entre ejes).</p>
-    <p>El escudo de las puertas delanteras está simplificado: en el carro real va el escudo oficial de la municipalidad. Las franjas llevan los colores de la bandera de Chachapoyas: celeste, verde olivo y rojo escarlata.</p>
+    <p>El escudo de Chachapoyas (león de oro sobre rojo, bordura azul con arcos y flechas, cartela dorada) es un dibujo vectorial propio basado en «Escudo de Chachapoyas.png» de MiguelAngel2015 en Wikimedia Commons, licencia CC BY-SA 4.0. La ordenanza dice que el diseño del escudo para los taxis lo elabora y autoriza la SGTCV; si su versión tiene otro detalle, se cambia. Las franjas llevan los colores de la bandera de Chachapoyas: celeste, verde olivo y rojo escarlata.</p>
     <p>Chasqui Taxi · un proyecto TeChaos · modelo hecho a mano con three.js, sin fotos de nadie.</p>
   </footer>
 </main>
@@ -381,8 +384,12 @@ h2{font-family:var(--font-display);font-weight:800;font-size:clamp(26px,4.4vw,34
   function chapa(ctx, x, y, placa, op = {}) {
     const dpr = op.dpr || 1, fs = (op.grande ? 15 : 12.5) * dpr;
     ctx.save();
+    // el número de taxi (registro municipal) va al lado, en una pastilla oscura: «M2R-392 | 045»
+    const num = op.numero ? String(op.numero) : '';
+    ctx.font = `800 ${fs * 0.78}px ${FUENTE}`;
+    const wn = num ? ctx.measureText(num).width + 10 * dpr : 0;
     ctx.font = `800 ${fs}px ${FUENTE}`;
-    const w = ctx.measureText(placa).width + 12 * dpr, h = fs + 7 * dpr;
+    const wp = ctx.measureText(placa).width + 12 * dpr, w = wp + wn, h = fs + 7 * dpr;
     const bx = x - w / 2, by = y - h - (op.alto || 22) * dpr;
     ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 6 * dpr; ctx.shadowOffsetY = 2 * dpr;
     ctx.fillStyle = '#FFFFFF'; redondo(ctx, bx, by, w, h, 4 * dpr); ctx.fill();
@@ -392,7 +399,12 @@ h2{font-family:var(--font-display);font-weight:800;font-size:clamp(26px,4.4vw,34
     const fw = w - 8 * dpr;
     BANDERA.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(bx + 4 * dpr + i * fw / 3, by + h - 3.2 * dpr, fw / 3, 1.8 * dpr); });
     ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(placa, x, by + h / 2 - 1 * dpr);
+    ctx.fillText(placa, bx + wp / 2, by + h / 2 - 1 * dpr);
+    if (num) {
+      ctx.fillStyle = '#111'; redondo(ctx, bx + wp, by, wn, h, 4 * dpr); ctx.fill();
+      ctx.fillStyle = '#F4CF35'; ctx.font = `800 ${fs * 0.78}px ${FUENTE}`;
+      ctx.fillText(num, bx + wp + wn / 2, by + h / 2 - 1 * dpr);
+    }
     if (op.punta !== false) {
       ctx.beginPath(); ctx.moveTo(x - 4 * dpr, by + h); ctx.lineTo(x, by + h + 5 * dpr); ctx.lineTo(x + 4 * dpr, by + h); ctx.closePath();
       ctx.fillStyle = '#111'; ctx.fill();
@@ -401,9 +413,55 @@ h2{font-family:var(--font-display);font-weight:800;font-size:clamp(26px,4.4vw,34
     return [bx, by, w, h];
   }
 
+  /* ---------- escudo de Chachapoyas (art. 40.1.4: en el centro de las puertas delanteras) ----------
+   * León de oro rampante sobre campo rojo, bordura azul con arcos y flechas de plata, y la cartela dorada
+   * con volutas rojas. Dibujo vectorial propio a partir de «Escudo de Chachapoyas.png» (MiguelAngel2015,
+   * Wikimedia Commons, CC BY-SA 4.0). viewBox 0 0 200 232. */
+  function escudoG(p) {
+    const ln = (d, w, c) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const cartela = 'M100 18 C112 18 118 26 124 30 L140 30 C150 22 168 22 172 34 C176 46 166 52 160 50 L162 64 C174 66 178 78 170 86 L170 104 C180 108 182 122 172 128 L170 146 C180 152 178 168 166 170 C160 186 140 196 124 202 C114 206 106 214 100 222 C94 214 86 206 76 202 C60 196 40 186 34 170 C22 168 20 152 30 146 L28 128 C18 122 20 108 30 104 L30 86 C22 78 26 66 38 64 L40 50 C34 52 24 46 28 34 C32 22 50 22 60 30 L76 30 C82 26 88 18 100 18 Z';
+    const arcoH = (y, a, b, k) => `<path d="M${a} ${y} Q100 ${y - k} ${b} ${y} Q100 ${y - k * 0.15} ${a} ${y} Z" fill="#fff" stroke="#1B2433" stroke-width=".8"/>` +
+      ln(`M${a + 6} ${y + 2} L${b - 6} ${y - k * 0.55}`, 1, '#1B2433') + ln(`M${a + 6} ${y - k * 0.55} L${b - 6} ${y + 2}`, 1, '#1B2433');
+    const arcoV = (x, s) => `<path d="M${x} 76 Q${x - 11 * s} 112 ${x} 150 Q${x - 5 * s} 112 ${x} 76 Z" fill="#fff" stroke="#1B2433" stroke-width=".8"/>` +
+      ln(`M${x - 6 * s} 152 L${x - 2 * s} 74`, 1, '#1B2433') + ln(`M${x + 2 * s} 152 L${x - 3 * s} 74`, 1, '#1B2433') +
+      `<path d="M${x - 2 * s} 70 l-2.5 6 h5 Z M${x - 3 * s} 70 l-2.5 6 h5 Z" fill="#1B2433"/>`;
+    // melena en llamas alrededor de la cabeza (coordenadas del león, caja de 0 a 60 × 0 a 100)
+    const melena = Array.from({ length: 18 }, (_, i) => { const a = -0.3 + i / 18 * Math.PI * 1.9, r = i % 2 ? 11 : 17; return (i ? 'L' : 'M') + (20 + Math.cos(a) * r).toFixed(1) + ' ' + (20 + Math.sin(a) * r * 1.1).toFixed(1); }).join(' ') + 'Z';
+    return `<defs><pattern id="${p}r" width="6" height="5" patternUnits="userSpaceOnUse"><rect width="6" height="5" fill="#F4CF35"/><rect y="2.6" width="6" height="2" fill="#D63A1F"/></pattern></defs>
+<path d="${cartela}" fill="url(#${p}r)" stroke="#F4CF35" stroke-width="7" stroke-linejoin="round"/>
+<path d="${cartela}" fill="none" stroke="#8A6510" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M150 28 C164 8 192 16 188 38 C185 54 165 54 163 43 C161 34 172 30 177 37" fill="#C8261A" stroke="#7A1A10" stroke-width="1.4"/>
+<path d="M50 28 C36 8 8 16 12 38 C15 54 35 54 37 43 C39 34 28 30 23 37" fill="#C8261A" stroke="#7A1A10" stroke-width="1.4"/>
+<path d="M150 200 C164 214 184 206 180 192 C176 182 164 186 166 194" fill="#C8261A" stroke="#7A1A10" stroke-width="1.4"/>
+<path d="M50 200 C36 214 16 206 20 192 C24 182 36 186 34 194" fill="#C8261A" stroke="#7A1A10" stroke-width="1.4"/>
+<path d="M84 32 C86 10 114 10 116 32 C110 26 90 26 84 32 Z" fill="#F4CF35" stroke="#8A6510" stroke-width="1.4"/><ellipse cx="100" cy="22" rx="5" ry="6" fill="#C8261A"/>
+<path d="M56 46 L144 46 L144 150 C144 176 122 192 100 202 C78 192 56 176 56 150 Z" fill="#2C6BD4" stroke="#12357A" stroke-width="2"/>
+${arcoH(60, 70, 130, 16)}${arcoH(190, 82, 118, -12)}${arcoV(64, 1)}${arcoV(136, -1)}
+<path d="M72 64 L128 64 L128 144 C128 162 115 174 100 180 C85 174 72 162 72 144 Z" fill="#E8411F" stroke="#7A1A10" stroke-width="1.2"/>
+<g transform="translate(77 76) scale(.87)">
+${ln('M49 60 C60 56 62 40 56 30 C52 24 50 20 53 16', 4.2, '#6E4210')}${ln('M49 60 C60 56 62 40 56 30 C52 24 50 20 53 16', 2.6, '#F6B92B')}
+<path d="M53 16 l-4 -5 l6 2 l1 -6 l3 6 l5 -2 l-4 6 Z" fill="#F6B92B" stroke="#6E4210" stroke-width="1"/>
+<path d="${LEON}" fill="#F6B92B" stroke="#6E4210" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="${melena}" fill="#E8A21E" stroke="#6E4210" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M8 13 C10 7 18 5 24 9 C28 13 27 22 22 26 L14 28 L10 25 L5 25 L3 21 L7 19 Z" fill="#F6B92B" stroke="#6E4210" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M3 21 L9 22 M5 25 L9 23" stroke="#B4232C" stroke-width="1.3" stroke-linecap="round"/><circle cx="13" cy="14" r="1.4" fill="#1B2433"/>
+${ln('M26 46 C30 52 34 56 40 58 M34 40 C38 44 42 48 46 50 M30 70 C32 76 30 82 26 86 M44 72 C46 80 46 86 44 92', 1, '#9A6214')}
+</g>`;
+  }
+  // león rampante mirando a la izquierda: garras delanteras en alto, patas traseras abiertas
+  const LEON = 'M16 30 L8 33 L2 29 L0 31 L1 34 L-1 36 L3 37 L9 39 L18 39 L20 43 L11 46 L5 44 L3 47 L4 50 L2 52 L7 53 L15 54 L23 52 ' +
+    'L27 59 L29 66 L24 73 L19 82 L12 88 L9 92 L11 95 L15 94 L18 96 L21 93 L27 89 L33 81 L37 73 L41 76 L44 85 L41 92 L38 96 L42 98 ' +
+    'L46 96 L50 98 L52 94 L50 86 L49 76 L48 66 L50 60 L49 52 L44 44 L38 36 L34 28 L28 24 Z';
+  let nEsc = 0;
+  function svgEscudo(op = {}) {
+    const p = 'esc' + (++nEsc) + Math.random().toString(36).slice(2, 5);
+    return `<svg viewBox="0 0 200 232" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${op.titulo || 'Escudo de Chachapoyas'}"${op.ancho ? ` width="${op.ancho}" height="${Math.round(op.ancho * 1.16)}"` : ''}>${escudoG(p)}</svg>`;
+  }
+
   /* ---------- de costado (SVG), con el código en la puerta posterior y en el techo ---------- */
   function svgLado(placa, op = {}) {
     placa = String(placa || 'ABC-123').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
+    const numero = String(op.numero || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 10);   // número de registro municipal
     const titulo = op.titulo || ('Taxi blanco de Chachapoyas, placa ' + placa);
     const id = 'tx' + Math.random().toString(36).slice(2, 7);
     return `<svg viewBox="0 0 440 170" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${titulo}">
@@ -419,7 +477,8 @@ h2{font-family:var(--font-display);font-weight:800;font-size:clamp(26px,4.4vw,34
 <path d="M150 74 L338 68" stroke="#6E736E" stroke-width="1.2" fill="none"/>
 <path d="M150 78 L150 128 M250 76 L250 128 M346 72 L346 128" stroke="#9AA09A" stroke-width="1.4"/>
 <rect x="198" y="88" width="16" height="4" rx="2" fill="#9AA09A"/><rect x="298" y="86" width="16" height="4" rx="2" fill="#9AA09A"/>
-<g transform="translate(176 96)"><path d="M0 0 H22 V12 Q22 24 11 28 Q0 24 0 12 Z" fill="#D9A21B" stroke="#7A4E10" stroke-width="1.2"/><path d="M4 4 H18 V12 Q18 20 11 23 Q4 20 4 12 Z" fill="#B4232C"/><path d="M11 6 L14 12 L11 18 L8 12 Z" fill="#F4E2A8"/></g>
+<g transform="translate(186 80) scale(.13)">${escudoG(id + 'e')}</g>
+${numero ? `<text x="199" y="121" font-family="Arial, sans-serif" font-weight="700" font-size="8.5" text-anchor="middle" fill="#111">N° ${numero}</text>` : ''}
 <text x="296" y="93" font-family="${FUENTE.replace(/'/g, '')}" font-weight="800" font-size="16" text-anchor="middle" fill="#111" letter-spacing=".6">${placa}</text>
 <rect x="254" y="101" width="46" height="5" fill="${BANDERA[0]}"/><rect x="254" y="106" width="46" height="5" fill="${BANDERA[1]}"/><rect x="254" y="111" width="46" height="5" fill="${BANDERA[2]}"/>
 <rect x="44" y="112" width="18" height="5" fill="#E8312F"/><rect x="384" y="110" width="18" height="5" fill="#E8312F"/>
@@ -524,7 +583,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
   /* tamaño del carro en pantalla: un poco más grande que la realidad para que se vea bien en el celular */
   function largoEnPantalla(pxPorMetro, minimo = 30) { return Math.max(minimo, Math.min(124, pxPorMetro * MEDIDAS.largo * 2.2)); }
 
-  root.ChasquiTaxi = { dibujar, chapa, svgLado, Flota, largoEnPantalla, MEDIDAS, BANDERA, ESTADOS };
+  root.ChasquiTaxi = { dibujar, chapa, svgLado, svgEscudo, Flota, largoEnPantalla, MEDIDAS, BANDERA, ESTADOS };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -535,20 +594,23 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
   const T = globalThis.ChasquiTaxi;
   const FUENTE = "'Big Shoulders Display','Arial Narrow',sans-serif";
   const BANDERA = T.BANDERA;
-  let PLACA = 'M2R-392';
+  let PLACA = 'M2R-392', NUMERO = '001';
   const limpiar = s => String(s || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8) || 'ABC-123';
 
   /* ---------- las 9 marcas (guía municipal) ---------- */
+  // Las 9 de la guía de la SGTCV, con el artículo de la Ord. 302-2025-MPCH que las pide, y dos más que trae el art. 40
   const MARCAS = [
-    { n: 1, t: 'Pintado distintivo', p: 'En los dos costados: el escudo de la municipalidad en las puertas delanteras y las franjas con los colores de la bandera de Chachapoyas en las de atrás.', m: 'Franjas de 7 cm cada una', v: 'izq', foco: ['escudo', 'franjas'] },
-    { n: 2, t: 'Láminas reflectivas', p: 'Cintas rojas que brillan con la luz de otro carro. Van a los dos lados y atrás.', m: 'En ambos lados del vehículo', v: 'trasero', foco: ['reflectivas'] },
-    { n: 3, t: 'Cuatro puertas', p: 'El taxi tiene que ser de cuatro puertas (categoría M1, desde 1250 cc y 1000 kg).', m: '4 puertas', v: 'der', foco: ['puertas'] },
-    { n: 4, t: 'Casquete TAXI', p: 'Letrero de acrílico blanco con letras rojas, fijo en el techo y siempre prendido. No vale imantado ni removible.', m: '30 × 15 × 10,5 cm', v: 'tres', foco: ['casquete'] },
-    { n: 5, t: 'Placa en los laterales', p: 'El código de la placa pintado en negro en las dos puertas de atrás.', m: '30 × 10 cm', v: 'der', foco: ['codigoLado'] },
-    { n: 6, t: 'Placas de rodaje', p: 'Adelante y atrás, la placa oficial: blanca con la franja amarilla de servicio público arriba.', m: 'Placa nacional vigente', v: 'atras', foco: ['placas'] },
-    { n: 7, t: 'Elementos de seguridad', p: 'Extintor, botiquín, conos o triángulos, linterna, gata y llanta de repuesto. Van adentro y en la maletera.', m: 'Dentro del carro', v: 'abajo', foco: ['repuesto'] },
-    { n: 8, t: 'Cartilla informativa', p: 'Adentro, a la vista del pasajero: los datos del conductor y del carro. En Chasqui también la ves en tu celular antes de subir.', m: 'Visible para el usuario', v: 'tres', foco: ['parabrisas'] },
-    { n: 9, t: 'Código en el techo', p: 'El código pintado arriba, para que se lea desde lo alto. Es el mismo que ves en el mapa de la app.', m: '30 × 20 cm', v: 'arriba', foco: ['codigoTecho'] },
+    { n: 1, t: 'Pintado distintivo', p: 'Todo el carro blanco. En el centro de las puertas delanteras, el escudo de Chachapoyas; en las de atrás, las franjas celeste, verde olivo y rojo escarlata de la bandera, a lo ancho de la puerta.', m: 'Franjas de 7 cm cada una · art. 40.1.1, 40.1.3 y 40.1.4', v: 'izq', foco: ['escudo', 'franjas'] },
+    { n: 2, t: 'Láminas reflectivas', p: 'Cintas rojas y blancas que brillan con la luz de otro carro. Van a los dos lados y atrás.', m: 'En ambos lados del vehículo', v: 'trasero', foco: ['reflectivas'] },
+    { n: 3, t: 'Cuatro puertas', p: 'El taxi tiene que ser de cuatro puertas (categoría M1, desde 1250 cc y 1000 kg).', m: '4 puertas · art. 38', v: 'der', foco: ['puertas'] },
+    { n: 4, t: 'Casquete TAXI', p: 'Letrero de acrílico blanco con la palabra TAXI en rojo adelante y atrás, fijo en el techo y siempre prendido. No vale imantado, removible ni farol.', m: '30 × 15 × 10,5 cm · art. 40.1.5', v: 'tres', foco: ['casquete'] },
+    { n: 5, t: 'Placa en los laterales', p: 'El número de la placa pintado en negro en las dos puertas de atrás.', m: '30 × 10 cm · art. 40.1.2', v: 'der', foco: ['codigoLado'] },
+    { n: 6, t: 'Placas de rodaje', p: 'Adelante y atrás, la placa oficial: blanca con la franja amarilla arriba.', m: 'Placa nacional vigente', v: 'atras', foco: ['placas'] },
+    { n: 7, t: 'Elementos de seguridad', p: 'Extintor, botiquín, conos o triángulos, linterna, gata y llanta de repuesto. Van adentro y en la maletera.', m: 'Dentro del carro · art. 38', v: 'abajo', foco: ['repuesto'] },
+    { n: 8, t: 'Cartilla informativa', p: 'Detrás de los asientos delanteros, a la vista del pasajero: los datos del conductor. En Chasqui también la ves en tu celular antes de subir.', m: 'Anexo 06 · art. 40.1.10', v: 'tres', foco: ['parabrisas'] },
+    { n: 9, t: 'Código en el techo', p: 'Pintado en negro arriba, «el número de código del vehículo» con las letras y números de la placa, para que se lea desde lo alto. Es el que ves sobre cada taxi en el mapa de la app.', m: '30 × 20 cm · art. 40.1.7', v: 'arriba', foco: ['codigoTecho'] },
+    { n: 10, t: 'Número de taxi', p: 'El número de registro que asigna la Municipalidad, en negro y letra de imprenta, debajo del escudo de las puertas delanteras. En la app sale al lado del código, en la pastilla oscura.', m: '3 × 15 cm · art. 40.1.9', v: 'izq', foco: ['numero', 'escudo'] },
+    { n: 11, t: 'Sticker TAXI', p: 'Autoadhesivo de lectura exterior que entrega la Municipalidad, arriba a la derecha del parabrisas, por dentro.', m: 'Art. 40.1.8', v: 'frente', foco: ['sticker'] },
   ];
   const ul = $('marcas');
   for (const m of MARCAS) {
@@ -588,14 +650,20 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
     x.lineWidth = 10; x.strokeStyle = '#C8102E'; x.strokeRect(5, 5, 502, 170);
     return c;
   }
-  function texEscudo() {   // escudo simplificado (en el carro real va el escudo oficial)
-    const [c, x] = lienzo(256, 300);
-    x.beginPath(); x.moveTo(20, 20); x.lineTo(236, 20); x.lineTo(236, 150); x.quadraticCurveTo(230, 250, 128, 290); x.quadraticCurveTo(26, 250, 20, 150); x.closePath();
-    x.fillStyle = '#D9A21B'; x.fill(); x.lineWidth = 10; x.strokeStyle = '#7A4E10'; x.stroke();
-    x.beginPath(); x.moveTo(46, 44); x.lineTo(210, 44); x.lineTo(210, 150); x.quadraticCurveTo(205, 225, 128, 258); x.quadraticCurveTo(51, 225, 46, 150); x.closePath();
-    x.fillStyle = '#B4232C'; x.fill();
-    x.beginPath(); x.moveTo(128, 70); x.lineTo(176, 150); x.lineTo(128, 230); x.lineTo(80, 150); x.closePath(); x.fillStyle = '#F4E2A8'; x.fill();
-    x.beginPath(); x.moveTo(128, 112); x.lineTo(150, 150); x.lineTo(128, 188); x.lineTo(106, 150); x.closePath(); x.fillStyle = '#B4232C'; x.fill();
+  // escudo de Chachapoyas (art. 40.1.4): el mismo dibujo vectorial que usan las apps (core/chasqui-taxi.js)
+  let ESCUDO = null;
+  function cargarEscudo() {
+    return new Promise(r => {
+      const im = new Image();
+      im.onload = () => { ESCUDO = im; r(); }; im.onerror = () => r();
+      im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(T.svgEscudo());
+    });
+  }
+  function texEscudo() { const [c, x] = lienzo(400, 464); if (ESCUDO) x.drawImage(ESCUDO, 0, 0, 400, 464); return c; }
+  function texNumero() {   // número de registro municipal bajo el escudo (art. 40.1.9: negro, 3 × 15 cm, letra de imprenta)
+    const [c, x] = lienzo(500, 100);
+    x.fillStyle = '#111'; x.font = '700 78px Arial, Helvetica, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('N° ' + NUMERO, 250, 54, 490);
     return c;
   }
   function texReflectiva() { const [c, x] = lienzo(128, 32); for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#FFFFFF' : '#E8312F'; x.fillRect(i * 16, 0, 16, 32); } return c; }
@@ -682,6 +750,17 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
     const w1 = anchoCab(0.98) + 0.03, w2 = anchoCab(1.40) + 0.035;
     const parabrisas = new THREE.Mesh(quad(...[[sX(1.53), 0.985, -w1 * 0.93], [sX(1.53), 0.985, w1 * 0.93], [sX(2.09), 1.415, w2 * 0.9], [sX(2.09), 1.415, -w2 * 0.9]].map(p => fuera(p, nF))), vidrio);
     parabrisas.material.side = THREE.DoubleSide; g.add(parabrisas); partes.parabrisas = [parabrisas];
+    // sticker TAXI de la municipalidad, arriba a la derecha del parabrisas (art. 40.1.8)
+    {
+      const [c, x] = lienzo(256, 112); x.fillStyle = '#fff'; x.fillRect(0, 0, 256, 112); x.lineWidth = 8; x.strokeStyle = '#1F3B2D'; x.strokeRect(4, 4, 248, 104);
+      x.fillStyle = '#C8102E'; x.font = `800 80px ${FUENTE}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('TAXI', 128, 60);
+      const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+      const st = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.07), new THREE.MeshStandardMaterial({ map: t, roughness: 0.5 }));
+      const s = 1.98, y = 0.985 + (1.415 - 0.985) * (s - 1.53) / (2.09 - 1.53);
+      st.position.set(sX(s) + nF[0] * 0.05, y + nF[1] * 0.05, 0.42);
+      st.lookAt(st.position.x + nF[0], st.position.y + nF[1], 0.42);
+      g.add(st); partes.sticker = [st];
+    }
     const w3 = anchoCab(1.45) + 0.035, w4 = anchoCab(1.03) + 0.03;
     g.add(new THREE.Mesh(quad(...[[sX(3.16), 1.44, -w3 * 0.9], [sX(3.16), 1.44, w3 * 0.9], [sX(3.50), 1.03, w4 * 0.93], [sX(3.50), 1.03, -w4 * 0.93]].map(p => fuera(p, nA))), vidrio));
     const ventanas = [
@@ -731,7 +810,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
       const m = new THREE.Mesh(new THREE.PlaneGeometry(ancho, alto), new THREE.MeshStandardMaterial({ map: tex, transparent: transparente, roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -2 }));
       m.position.set(sX(s), y, lado * ladoZ); m.rotation.y = lado > 0 ? 0 : Math.PI; g.add(m); return m;
     }
-    partes.escudo = [calco(texEscudo(), 0.18, 0.21, 2.12, 0.72, 1), calco(texEscudo(), 0.18, 0.21, 2.12, 0.72, -1)];
+    partes.escudo = [calco(texEscudo(), 0.19, 0.22, 2.12, 0.76, 1), calco(texEscudo(), 0.19, 0.22, 2.12, 0.76, -1)];
     partes.franjas = [calco(texFranjas(), 0.34, 0.21, 2.86, 0.63, 1, false), calco(texFranjas(), 0.34, 0.21, 2.86, 0.63, -1, false)];
     partes.reflectivas = [];
     for (const lado of [-1, 1]) for (const s of [0.28, 3.98]) partes.reflectivas.push(calco(texReflectiva(), 0.2, 0.05, s, 0.47, lado, false));
@@ -746,7 +825,8 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
       for (const m of codigos) { m.material.map.dispose(); g.remove(m); }
       codigos.length = 0;
       partes.codigoLado = [calco(texCodigo(true), 0.30, 0.10, 2.92, 0.83, 1), calco(texCodigo(true), 0.30, 0.10, 2.92, 0.83, -1)];
-      codigos.push(...partes.codigoLado);
+      partes.numero = [calco(texNumero(), 0.15, 0.03, 2.12, 0.625, 1), calco(texNumero(), 0.15, 0.03, 2.12, 0.625, -1)];
+      codigos.push(...partes.codigoLado, ...partes.numero);
       const tt = new THREE.CanvasTexture(texCodigo(true, 600, 400)); tt.anisotropy = 8; tt.encoding = THREE.sRGBEncoding;
       const techo = new THREE.Mesh(new THREE.PlaneGeometry(0.30, 0.20), new THREE.MeshStandardMaterial({ map: tt, transparent: true, polygonOffset: true, polygonOffsetFactor: -2 }));
       techo.rotation.x = -Math.PI / 2; techo.rotation.z = -Math.PI / 2;   // se lee desde atrás, como una placa
@@ -985,7 +1065,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
       const estados = [['libre', 150, 185, Math.PI / 2], ['recogiendo', 400, 185, -Math.PI / 2], ['abordo', 600, 125, Math.PI], ['encadenado', 820, 185, Math.PI / 2]];
       for (const [e, px, py, r] of estados) {
         T.dibujar(x, px, y0 + py, r, { largo: 96, placa: PLACA, estado: e, dpr: 2, noche: nocheM, resaltar: e === 'recogiendo', pulso: 0.35 });
-        T.chapa(x, px, y0 + py, PLACA, { dpr: 2, alto: 30 });
+        T.chapa(x, px, y0 + py, PLACA, { dpr: 2, alto: 30, numero: NUMERO });
       }
       x.fillStyle = nocheM ? '#E8E5DA' : '#1B2620'; x.font = `800 30px ${FUENTE}`; x.textAlign = 'left'; x.textBaseline = 'top';
       x.fillText(nocheM ? 'DE NOCHE' : 'DE DÍA', 1040, y0 + 20);
@@ -993,27 +1073,30 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
       T.dibujar(x, 1140, y0 + 215, -0.5, { largo: 170, placa: PLACA, estado: 'libre', dpr: 2, noche: nocheM });
       x.restore();
     }
-    $('lado').innerHTML = T.svgLado(PLACA);
+    $('lado').innerHTML = T.svgLado(PLACA, { numero: NUMERO });
   }
 
   /* ---------- placa ---------- */
   let tPlaca = 0;
-  $('placa').addEventListener('input', e => {
+  const repintar = () => {
     clearTimeout(tPlaca);
     tPlaca = setTimeout(() => {
-      PLACA = limpiar(e.target.value);
+      PLACA = limpiar($('placa').value);
+      NUMERO = String($('numero').value || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 6) || '001';
       if (taxi) taxi.partes.pintarCodigos();
       dibujarMapaDemo();
       if (taxi) dibujarPlano();
     }, 250);
-  });
+  };
+  $('placa').addEventListener('input', repintar);
+  $('numero').addEventListener('input', repintar);
   document.querySelectorAll('.vistas button').forEach(b => b.addEventListener('click', () => irA(b.dataset.v)));
   $('bGirar').addEventListener('click', () => { girar = !girar; $('bGirar').setAttribute('aria-pressed', String(girar)); vuelo = null; });
   $('bNoche').addEventListener('click', () => ponerNoche(!noche));
   addEventListener('resize', () => { if (renderer) { medir3D(); clearTimeout(tPlaca); tPlaca = setTimeout(dibujarPlano, 300); } });
 
   const fuentes = document.fonts ? Promise.race([document.fonts.load(`800 40px ${FUENTE}`), new Promise(r => setTimeout(r, 2500))]) : Promise.resolve();
-  fuentes.then(() => {
+  fuentes.then(cargarEscudo).then(() => {
     dibujarMapaDemo();
     if (!globalThis.THREE) { $('cargando').textContent = 'No se pudo cargar el visor 3D. Revisa tu internet.'; return; }
     try { iniciar3D(); dibujarPlano(); }

@@ -134,6 +134,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .cartilla svg{display:block;width:100%;height:auto}
 .cartilla .lbl{display:block;font-size:12px;color:var(--muted);line-height:1.25;margin-bottom:4px}
 .codigo{display:inline-block;position:relative;font-family:var(--font-display);font-weight:800;font-size:30px;letter-spacing:.05em;line-height:1;color:#111;background:#fff;border:2.5px solid #111;border-radius:7px;padding:5px 10px 9px;font-variant-numeric:tabular-nums}
+.numero-taxi{display:block;width:fit-content;margin:6px 0 0;font-family:var(--font-display);font-weight:800;font-size:17px;letter-spacing:.05em;background:#111;color:#F4CF35;border-radius:6px;padding:2px 8px}
 .codigo::after{content:"";position:absolute;left:6px;right:6px;bottom:3px;height:3px;background:linear-gradient(90deg,#3FA9E0 0 33.3%,#5B6B1E 33.3% 66.6%,#C8102E 66.6%)}
 .eta{display:flex;align-items:baseline;gap:8px;margin:0 0 6px}
 .eta .num{font-family:var(--font-display);font-weight:800;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
@@ -280,7 +281,7 @@ input[type=datetime-local]{width:100%;font:inherit;color:var(--ink);background:v
       <p class="estado-txt" id="vEstado"></p>
       <div class="cartilla">
         <div id="vCarro" aria-hidden="true"></div>
-        <div><span class="lbl">Búscalo por el código pintado en su techo y en sus puertas</span><span class="codigo" id="vCodigo"></span></div>
+        <div><span class="lbl">Búscalo por el código pintado en su techo y en sus puertas</span><span class="codigo" id="vCodigo"></span><span class="numero-taxi" id="vNumero" hidden></span></div>
       </div>
       <div class="chofer">
         <span class="avatar" id="vInicial">C</span>
@@ -1002,8 +1003,12 @@ globalThis.CHASQUI_CONFIG = {
   function chapa(ctx, x, y, placa, op = {}) {
     const dpr = op.dpr || 1, fs = (op.grande ? 15 : 12.5) * dpr;
     ctx.save();
+    // el número de taxi (registro municipal) va al lado, en una pastilla oscura: «M2R-392 | 045»
+    const num = op.numero ? String(op.numero) : '';
+    ctx.font = `800 ${fs * 0.78}px ${FUENTE}`;
+    const wn = num ? ctx.measureText(num).width + 10 * dpr : 0;
     ctx.font = `800 ${fs}px ${FUENTE}`;
-    const w = ctx.measureText(placa).width + 12 * dpr, h = fs + 7 * dpr;
+    const wp = ctx.measureText(placa).width + 12 * dpr, w = wp + wn, h = fs + 7 * dpr;
     const bx = x - w / 2, by = y - h - (op.alto || 22) * dpr;
     ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 6 * dpr; ctx.shadowOffsetY = 2 * dpr;
     ctx.fillStyle = '#FFFFFF'; redondo(ctx, bx, by, w, h, 4 * dpr); ctx.fill();
@@ -1013,7 +1018,12 @@ globalThis.CHASQUI_CONFIG = {
     const fw = w - 8 * dpr;
     BANDERA.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(bx + 4 * dpr + i * fw / 3, by + h - 3.2 * dpr, fw / 3, 1.8 * dpr); });
     ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(placa, x, by + h / 2 - 1 * dpr);
+    ctx.fillText(placa, bx + wp / 2, by + h / 2 - 1 * dpr);
+    if (num) {
+      ctx.fillStyle = '#111'; redondo(ctx, bx + wp, by, wn, h, 4 * dpr); ctx.fill();
+      ctx.fillStyle = '#F4CF35'; ctx.font = `800 ${fs * 0.78}px ${FUENTE}`;
+      ctx.fillText(num, bx + wp + wn / 2, by + h / 2 - 1 * dpr);
+    }
     if (op.punta !== false) {
       ctx.beginPath(); ctx.moveTo(x - 4 * dpr, by + h); ctx.lineTo(x, by + h + 5 * dpr); ctx.lineTo(x + 4 * dpr, by + h); ctx.closePath();
       ctx.fillStyle = '#111'; ctx.fill();
@@ -1022,9 +1032,55 @@ globalThis.CHASQUI_CONFIG = {
     return [bx, by, w, h];
   }
 
+  /* ---------- escudo de Chachapoyas (art. 40.1.4: en el centro de las puertas delanteras) ----------
+   * León de oro rampante sobre campo rojo, bordura azul con arcos y flechas de plata, y la cartela dorada
+   * con volutas rojas. Dibujo vectorial propio a partir de «Escudo de Chachapoyas.png» (MiguelAngel2015,
+   * Wikimedia Commons, CC BY-SA 4.0). viewBox 0 0 200 232. */
+  function escudoG(p) {
+    const ln = (d, w, c) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const cartela = 'M100 18 C112 18 118 26 124 30 L140 30 C150 22 168 22 172 34 C176 46 166 52 160 50 L162 64 C174 66 178 78 170 86 L170 104 C180 108 182 122 172 128 L170 146 C180 152 178 168 166 170 C160 186 140 196 124 202 C114 206 106 214 100 222 C94 214 86 206 76 202 C60 196 40 186 34 170 C22 168 20 152 30 146 L28 128 C18 122 20 108 30 104 L30 86 C22 78 26 66 38 64 L40 50 C34 52 24 46 28 34 C32 22 50 22 60 30 L76 30 C82 26 88 18 100 18 Z';
+    const arcoH = (y, a, b, k) => `<path d="M${a} ${y} Q100 ${y - k} ${b} ${y} Q100 ${y - k * 0.15} ${a} ${y} Z" fill="#fff" stroke="#1B2433" stroke-width=".8"/>` +
+      ln(`M${a + 6} ${y + 2} L${b - 6} ${y - k * 0.55}`, 1, '#1B2433') + ln(`M${a + 6} ${y - k * 0.55} L${b - 6} ${y + 2}`, 1, '#1B2433');
+    const arcoV = (x, s) => `<path d="M${x} 76 Q${x - 11 * s} 112 ${x} 150 Q${x - 5 * s} 112 ${x} 76 Z" fill="#fff" stroke="#1B2433" stroke-width=".8"/>` +
+      ln(`M${x - 6 * s} 152 L${x - 2 * s} 74`, 1, '#1B2433') + ln(`M${x + 2 * s} 152 L${x - 3 * s} 74`, 1, '#1B2433') +
+      `<path d="M${x - 2 * s} 70 l-2.5 6 h5 Z M${x - 3 * s} 70 l-2.5 6 h5 Z" fill="#1B2433"/>`;
+    // melena en llamas alrededor de la cabeza (coordenadas del león, caja de 0 a 60 × 0 a 100)
+    const melena = Array.from({ length: 18 }, (_, i) => { const a = -0.3 + i / 18 * Math.PI * 1.9, r = i % 2 ? 11 : 17; return (i ? 'L' : 'M') + (20 + Math.cos(a) * r).toFixed(1) + ' ' + (20 + Math.sin(a) * r * 1.1).toFixed(1); }).join(' ') + 'Z';
+    return `<defs><pattern id="${p}r" width="6" height="5" patternUnits="userSpaceOnUse"><rect width="6" height="5" fill="#F4CF35"/><rect y="2.6" width="6" height="2" fill="#D63A1F"/></pattern></defs>
+<path d="${cartela}" fill="url(#${p}r)" stroke="#F4CF35" stroke-width="7" stroke-linejoin="round"/>
+<path d="${cartela}" fill="none" stroke="#8A6510" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M150 28 C164 8 192 16 188 38 C185 54 165 54 163 43 C161 34 172 30 177 37" fill="#C8261A" stroke="#7A1A10" stroke-width="1.4"/>
+<path d="M50 28 C36 8 8 16 12 38 C15 54 35 54 37 43 C39 34 28 30 23 37" fill="#C8261A" stroke="#7A1A10" stroke-width="1.4"/>
+<path d="M150 200 C164 214 184 206 180 192 C176 182 164 186 166 194" fill="#C8261A" stroke="#7A1A10" stroke-width="1.4"/>
+<path d="M50 200 C36 214 16 206 20 192 C24 182 36 186 34 194" fill="#C8261A" stroke="#7A1A10" stroke-width="1.4"/>
+<path d="M84 32 C86 10 114 10 116 32 C110 26 90 26 84 32 Z" fill="#F4CF35" stroke="#8A6510" stroke-width="1.4"/><ellipse cx="100" cy="22" rx="5" ry="6" fill="#C8261A"/>
+<path d="M56 46 L144 46 L144 150 C144 176 122 192 100 202 C78 192 56 176 56 150 Z" fill="#2C6BD4" stroke="#12357A" stroke-width="2"/>
+${arcoH(60, 70, 130, 16)}${arcoH(190, 82, 118, -12)}${arcoV(64, 1)}${arcoV(136, -1)}
+<path d="M72 64 L128 64 L128 144 C128 162 115 174 100 180 C85 174 72 162 72 144 Z" fill="#E8411F" stroke="#7A1A10" stroke-width="1.2"/>
+<g transform="translate(77 76) scale(.87)">
+${ln('M49 60 C60 56 62 40 56 30 C52 24 50 20 53 16', 4.2, '#6E4210')}${ln('M49 60 C60 56 62 40 56 30 C52 24 50 20 53 16', 2.6, '#F6B92B')}
+<path d="M53 16 l-4 -5 l6 2 l1 -6 l3 6 l5 -2 l-4 6 Z" fill="#F6B92B" stroke="#6E4210" stroke-width="1"/>
+<path d="${LEON}" fill="#F6B92B" stroke="#6E4210" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="${melena}" fill="#E8A21E" stroke="#6E4210" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M8 13 C10 7 18 5 24 9 C28 13 27 22 22 26 L14 28 L10 25 L5 25 L3 21 L7 19 Z" fill="#F6B92B" stroke="#6E4210" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M3 21 L9 22 M5 25 L9 23" stroke="#B4232C" stroke-width="1.3" stroke-linecap="round"/><circle cx="13" cy="14" r="1.4" fill="#1B2433"/>
+${ln('M26 46 C30 52 34 56 40 58 M34 40 C38 44 42 48 46 50 M30 70 C32 76 30 82 26 86 M44 72 C46 80 46 86 44 92', 1, '#9A6214')}
+</g>`;
+  }
+  // león rampante mirando a la izquierda: garras delanteras en alto, patas traseras abiertas
+  const LEON = 'M16 30 L8 33 L2 29 L0 31 L1 34 L-1 36 L3 37 L9 39 L18 39 L20 43 L11 46 L5 44 L3 47 L4 50 L2 52 L7 53 L15 54 L23 52 ' +
+    'L27 59 L29 66 L24 73 L19 82 L12 88 L9 92 L11 95 L15 94 L18 96 L21 93 L27 89 L33 81 L37 73 L41 76 L44 85 L41 92 L38 96 L42 98 ' +
+    'L46 96 L50 98 L52 94 L50 86 L49 76 L48 66 L50 60 L49 52 L44 44 L38 36 L34 28 L28 24 Z';
+  let nEsc = 0;
+  function svgEscudo(op = {}) {
+    const p = 'esc' + (++nEsc) + Math.random().toString(36).slice(2, 5);
+    return `<svg viewBox="0 0 200 232" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${op.titulo || 'Escudo de Chachapoyas'}"${op.ancho ? ` width="${op.ancho}" height="${Math.round(op.ancho * 1.16)}"` : ''}>${escudoG(p)}</svg>`;
+  }
+
   /* ---------- de costado (SVG), con el código en la puerta posterior y en el techo ---------- */
   function svgLado(placa, op = {}) {
     placa = String(placa || 'ABC-123').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
+    const numero = String(op.numero || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 10);   // número de registro municipal
     const titulo = op.titulo || ('Taxi blanco de Chachapoyas, placa ' + placa);
     const id = 'tx' + Math.random().toString(36).slice(2, 7);
     return `<svg viewBox="0 0 440 170" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${titulo}">
@@ -1040,7 +1096,8 @@ globalThis.CHASQUI_CONFIG = {
 <path d="M150 74 L338 68" stroke="#6E736E" stroke-width="1.2" fill="none"/>
 <path d="M150 78 L150 128 M250 76 L250 128 M346 72 L346 128" stroke="#9AA09A" stroke-width="1.4"/>
 <rect x="198" y="88" width="16" height="4" rx="2" fill="#9AA09A"/><rect x="298" y="86" width="16" height="4" rx="2" fill="#9AA09A"/>
-<g transform="translate(176 96)"><path d="M0 0 H22 V12 Q22 24 11 28 Q0 24 0 12 Z" fill="#D9A21B" stroke="#7A4E10" stroke-width="1.2"/><path d="M4 4 H18 V12 Q18 20 11 23 Q4 20 4 12 Z" fill="#B4232C"/><path d="M11 6 L14 12 L11 18 L8 12 Z" fill="#F4E2A8"/></g>
+<g transform="translate(186 80) scale(.13)">${escudoG(id + 'e')}</g>
+${numero ? `<text x="199" y="121" font-family="Arial, sans-serif" font-weight="700" font-size="8.5" text-anchor="middle" fill="#111">N° ${numero}</text>` : ''}
 <text x="296" y="93" font-family="${FUENTE.replace(/'/g, '')}" font-weight="800" font-size="16" text-anchor="middle" fill="#111" letter-spacing=".6">${placa}</text>
 <rect x="254" y="101" width="46" height="5" fill="${BANDERA[0]}"/><rect x="254" y="106" width="46" height="5" fill="${BANDERA[1]}"/><rect x="254" y="111" width="46" height="5" fill="${BANDERA[2]}"/>
 <rect x="44" y="112" width="18" height="5" fill="#E8312F"/><rect x="384" y="110" width="18" height="5" fill="#E8312F"/>
@@ -1145,7 +1202,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
   /* tamaño del carro en pantalla: un poco más grande que la realidad para que se vea bien en el celular */
   function largoEnPantalla(pxPorMetro, minimo = 30) { return Math.max(minimo, Math.min(124, pxPorMetro * MEDIDAS.largo * 2.2)); }
 
-  root.ChasquiTaxi = { dibujar, chapa, svgLado, Flota, largoEnPantalla, MEDIDAS, BANDERA, ESTADOS };
+  root.ChasquiTaxi = { dibujar, chapa, svgLado, svgEscudo, Flota, largoEnPantalla, MEDIDAS, BANDERA, ESTADOS };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 /* Chasqui · mapa propio de Chachapoyas sobre <canvas> (OpenStreetMap, sin servidor de mapas).
@@ -1743,7 +1800,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
       if (a) {
         const p = flota.pos(a, ahora), [x, y] = xy(p.lat, p.lon);
         h.carro(x, y, p.rumbo, { estado: v.estado === 'abordo' ? 'abordo' : v.estado === 'encadenado' ? 'encadenado' : 'recogiendo', resaltar: true, pulso: (h.t % 1.6) / 1.6, placa: st.chofer.placa, minimo: 40 });
-        h.chapa(x, y, st.chofer.placa, { grande: true, minimo: 40 });
+        h.chapa(x, y, st.chofer.placa, { grande: true, minimo: 40, numero: st.chofer.numero_registro });
       }
     }
   }
@@ -1971,7 +2028,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
   }
   async function cargarChofer(tid) {
     const [t, p] = await Promise.all([
-      sb.from('taxistas').select('placa,marca,modelo,color,calificacion').eq('id', tid).maybeSingle(),
+      sb.from('taxistas').select('placa,numero_registro,marca,modelo,color,calificacion').eq('id', tid).maybeSingle(),
       sb.from('perfiles').select('nombre,telefono').eq('id', tid).maybeSingle(),
     ]);
     st.chofer = { id: tid, ...(t.data || {}), ...(p.data || {}) };
@@ -2029,8 +2086,10 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
           $('vAuto').textContent = [t.marca, t.modelo, t.color].filter(Boolean).join(' · ') + (t.calificacion ? ' · ★ ' + Number(t.calificacion).toFixed(1) : '');
           if ($('vCodigo').textContent !== (t.placa || '')) {
             $('vCodigo').textContent = t.placa || '';
-            $('vCarro').innerHTML = ChasquiTaxi.svgLado(t.placa || '');   // svgLado deja solo letras, números y guion
+            $('vCarro').innerHTML = ChasquiTaxi.svgLado(t.placa || '', { numero: t.numero_registro });   // svgLado deja solo letras, números y guion
           }
+          $('vNumero').hidden = !t.numero_registro;
+          $('vNumero').textContent = t.numero_registro ? 'Taxi N° ' + t.numero_registro : '';
           $('vTel').hidden = !t.telefono;
           $('vTel').textContent = t.telefono ? 'Celular: ' + t.telefono : '';
         }
