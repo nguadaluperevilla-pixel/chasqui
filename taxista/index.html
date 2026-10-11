@@ -73,13 +73,13 @@ label.campo{display:block;font-size:14px;color:var(--muted)}
 .lienzo{position:relative;flex:1;min-height:0;background:var(--manzana)}
 #mapa{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 .controles{position:absolute;right:12px;top:18px;display:flex;flex-direction:column;gap:8px;z-index:2}
-.controles button{width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.12);font-size:22px;line-height:1;display:grid;place-items:center}
+.controles button{width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 86%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 2px 10px rgba(0,0,0,.12);font-size:22px;line-height:1;display:grid;place-items:center}
 .gps-ico{width:18px;height:18px;border:2.5px solid var(--accent);border-radius:50%;position:relative}
 .gps-ico::after{content:"";position:absolute;inset:3.5px;border-radius:50%;background:var(--accent)}
-.atribucion{position:absolute;left:8px;bottom:6px;font-size:11px;color:var(--muted);z-index:1;pointer-events:none}
-.caja-chip{position:absolute;left:12px;top:18px;z-index:2;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px 10px;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.atribucion{position:absolute;right:8px;bottom:28px;font-size:11px;color:var(--muted);z-index:1;pointer-events:none}
+.caja-chip{position:absolute;left:12px;top:66px;z-index:2;background:color-mix(in srgb,var(--surface) 88%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:6px 10px;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
 .caja-chip b{font-family:var(--font-display);font-size:18px}
-.prueba-chip{position:absolute;left:12px;right:70px;bottom:14px;z-index:2;margin:0;background:var(--arcilla);color:#1B2620;font-weight:700;font-size:14px;border-radius:12px;padding:8px 12px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.prueba-chip{position:absolute;left:12px;right:70px;top:18px;z-index:2;margin:0;background:var(--arcilla);color:#1B2620;font-weight:700;font-size:14px;border-radius:12px;padding:8px 12px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.15)}
 
 .hoja{flex:none;position:relative;z-index:3;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:var(--sombra);margin-top:-22px;padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 16px);max-height:64vh;overflow-y:auto}
 .asa{width:44px;height:5px;border-radius:9px;background:var(--line);margin:0 auto 10px}
@@ -842,44 +842,458 @@ globalThis.CHASQUI_CONFIG = {
     }
 
     const calleCorta = d => d.calle >= 0 ? corto(CALLES[d.calle]) : 'calle sin nombre';
-    return { direccion, corto, calleCorta, CALLES, WN };
+    return { direccion, corto, calleCorta, CALLES, WN, walk: datos.walk || [] };
   }
 
   root.ChasquiCalles = { crear, corto };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* Chasqui · mapa propio de Chachapoyas sobre <canvas> (calles de OpenStreetMap, sin servidor de mapas).
- * Arrastrar, pellizcar y rueda para acercar; nombres de calles a lo largo de cada calle cuando hay zoom.
- * Uso: const m = ChasquiMapa.crear({ canvas, grafo, calles, lugares, encima(h), alTocar(lat, lon) })
- *   h (en encima) trae ayudas para dibujar encima del mapa: trazo, rombo, bandera, auto, rotulo, xy, col, ctx, dpr.
+/* Chasqui · el taxi de Chachapoyas dibujado como es (Ord. 302-2025-MPCH, art. 40, e infografía de la
+ * Sub Gerencia de Transportes y Circulación Vial): carro blanco de 4 puertas, casquete "TAXI" en el techo,
+ * código (placa) pintado en el techo y en las puertas posteriores, franjas celeste, verde olivo y rojo
+ * escarlata en las puertas posteriores, escudo municipal en las delanteras y láminas reflectivas.
+ *
+ *   ChasquiTaxi.dibujar(ctx, x, y, rumbo, op)   vista desde arriba sobre el mapa (x, y en píxeles del canvas)
+ *   ChasquiTaxi.chapa(ctx, x, y, placa, op)     el código del techo como chapa legible encima del carro
+ *   ChasquiTaxi.svgLado(placa, op)              el carro de costado (para la tarjeta del chofer)
+ *   new ChasquiTaxi.Flota(grafo)                movimiento suave por las calles entre dos reportes de GPS
+ * Medidas de referencia: Chevrolet Sail sedán 2013 (4,249 × 1,690 × 1,505 m; 2,465 m entre ejes).
  */
 (function (root) {
   'use strict';
-  const M_POR_GRADO = 110574;
+  const MEDIDAS = { largo: 4.249, ancho: 1.690, alto: 1.505, ejes: 2.465 };
+  const BANDERA = ['#3FA9E0', '#5B6B1E', '#C8102E'];        // celeste, verde olivo, rojo escarlata
+  const FUENTE = "'Big Shoulders Display','Arial Narrow','Segoe UI',sans-serif";
+  const ESTADOS = { libre: '#2E9A63', recogiendo: '#C98A1E', viaje: '#B4412A', abordo: '#B4412A', encadenado: '#4A87A0', fuera: '#8A918C' };
 
-  function crear({ canvas, grafo, calles: D, lugares, encima, alTocar }) {
+  /* ---------- vista desde arriba ----------
+   * El carro mira hacia arriba (y negativo) y se gira `rumbo` radianes en sentido horario (0 = norte).
+   * op: { largo: px, placa, estado, color, resaltar, noche, dpr, pulso (0..1) } */
+  function dibujar(ctx, x, y, rumbo, op = {}) {
+    const L = op.largo || 34, u = L / MEDIDAS.largo;          // u = píxeles por metro del dibujo
+    const hl = MEDIDAS.largo / 2, hw = MEDIDAS.ancho / 2;
+    const anillo = op.color || ESTADOS[op.estado] || null;
+    const dpr = op.dpr || 1;
+    ctx.save();
+    ctx.translate(x, y);
+
+    // halo del estado en el piso (no gira) y pulso del taxi que viene por ti
+    if (anillo) {
+      const r = L * 0.62;
+      const g = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r);
+      g.addColorStop(0, anillo + '66'); g.addColorStop(1, anillo + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+      if (op.resaltar) {
+        const p = op.pulso == null ? 0 : op.pulso;
+        ctx.beginPath(); ctx.arc(0, 0, r * (0.75 + 0.5 * p), 0, Math.PI * 2);
+        ctx.lineWidth = 2.2 * dpr; ctx.strokeStyle = anillo + Math.round((1 - p) * 200).toString(16).padStart(2, '0'); ctx.stroke();
+      }
+    }
+    // sombra: el sol de media mañana viene del noreste, la sombra cae al suroeste
+    ctx.save();
+    ctx.translate(-0.18 * u, 0.28 * u);
+    ctx.rotate(rumbo);
+    ctx.fillStyle = op.noche ? 'rgba(0,0,0,.55)' : 'rgba(30,25,20,.28)';
+    redondo(ctx, -hw * u, -hl * u, 2 * hw * u, 2 * hl * u, 0.42 * u); ctx.fill();
+    ctx.restore();
+
+    ctx.rotate(rumbo);
+    if (op.noche && L >= 26) {                                 // luces de noche
+      const g = ctx.createLinearGradient(0, -hl * u, 0, -hl * u - 5 * u);
+      g.addColorStop(0, 'rgba(255,240,190,.55)'); g.addColorStop(1, 'rgba(255,240,190,0)');
+      ctx.fillStyle = g; ctx.beginPath();
+      ctx.moveTo(-0.65 * u, -hl * u); ctx.lineTo(-1.7 * u, -hl * u - 5 * u); ctx.lineTo(1.7 * u, -hl * u - 5 * u); ctx.lineTo(0.65 * u, -hl * u);
+      ctx.closePath(); ctx.fill();
+    }
+
+    if (L < 20) { carroSimple(ctx, u, hl, hw, op); ctx.restore(); return; }
+
+    // carrocería blanca con volumen (más clara al centro, como un capó curvo)
+    const cuerpo = ctx.createLinearGradient(-hw * u, 0, hw * u, 0);
+    cuerpo.addColorStop(0, '#D9DBD6'); cuerpo.addColorStop(0.18, '#F7F7F3'); cuerpo.addColorStop(0.5, '#FFFFFF');
+    cuerpo.addColorStop(0.82, '#F7F7F3'); cuerpo.addColorStop(1, '#D3D5CF');
+    // espejos
+    ctx.fillStyle = '#E9EAE5'; ctx.strokeStyle = '#7C817C'; ctx.lineWidth = Math.max(0.6, 0.035 * u);
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(s * hw * u, -0.62 * u); ctx.lineTo(s * (hw + 0.17) * u, -0.56 * u);
+      ctx.lineTo(s * (hw + 0.17) * u, -0.43 * u); ctx.lineTo(s * hw * u, -0.42 * u); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = cuerpo;
+    contornoCarro(ctx, u, hl, hw); ctx.fill();
+    ctx.lineWidth = Math.max(0.8, 0.05 * u); ctx.strokeStyle = '#6E736E'; ctx.stroke();
+
+    // cabina de vidrio (parabrisas, ventanas de los costados y luna trasera)
+    const vidrio = ctx.createLinearGradient(0, -0.62 * u, 0, 1.45 * u);
+    vidrio.addColorStop(0, '#2C3A42'); vidrio.addColorStop(0.5, '#1C252B'); vidrio.addColorStop(1, '#33444D');
+    ctx.fillStyle = vidrio;
+    ctx.beginPath();
+    ctx.moveTo(-0.66 * u, -0.60 * u); ctx.quadraticCurveTo(0, -0.74 * u, 0.66 * u, -0.60 * u);
+    ctx.lineTo(0.70 * u, 0.55 * u); ctx.lineTo(0.64 * u, 1.43 * u);
+    ctx.quadraticCurveTo(0, 1.52 * u, -0.64 * u, 1.43 * u); ctx.lineTo(-0.70 * u, 0.55 * u); ctx.closePath(); ctx.fill();
+    // reflejo del cielo en el parabrisas
+    if (L >= 30) {
+      ctx.fillStyle = 'rgba(190,215,230,.22)';
+      ctx.beginPath(); ctx.moveTo(-0.5 * u, -0.58 * u); ctx.lineTo(-0.1 * u, -0.64 * u); ctx.lineTo(-0.35 * u, -0.12 * u); ctx.lineTo(-0.58 * u, -0.1 * u); ctx.closePath(); ctx.fill();
+    }
+    // techo blanco con parantes
+    const techo = ctx.createLinearGradient(-0.6 * u, 0, 0.6 * u, 0);
+    techo.addColorStop(0, '#E6E7E2'); techo.addColorStop(0.5, '#FFFFFF'); techo.addColorStop(1, '#E2E3DE');
+    ctx.fillStyle = techo;
+    redondo(ctx, -0.6 * u, -0.08 * u, 1.2 * u, 1.13 * u, 0.16 * u); ctx.fill();
+    ctx.lineWidth = Math.max(0.5, 0.03 * u); ctx.strokeStyle = '#9CA19B'; ctx.stroke();
+    ctx.fillStyle = '#F2F3EF';
+    for (const s of [-1, 1]) ctx.fillRect(s > 0 ? 0.6 * u : -0.72 * u, 0.42 * u, 0.12 * u, 0.1 * u);   // parante B
+
+    // capó y maletera: líneas de las tapas
+    if (L >= 30) {
+      ctx.strokeStyle = 'rgba(110,115,110,.55)'; ctx.lineWidth = Math.max(0.5, 0.025 * u);
+      ctx.beginPath(); ctx.moveTo(-0.62 * u, -1.98 * u); ctx.quadraticCurveTo(0, -2.06 * u, 0.62 * u, -1.98 * u); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-0.3 * u, -1.9 * u); ctx.lineTo(-0.22 * u, -0.85 * u); ctx.moveTo(0.3 * u, -1.9 * u); ctx.lineTo(0.22 * u, -0.85 * u); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-0.66 * u, 1.62 * u); ctx.quadraticCurveTo(0, 1.58 * u, 0.66 * u, 1.62 * u); ctx.stroke();
+    }
+    // faros y luces traseras
+    ctx.fillStyle = op.noche ? '#FFF4C8' : '#EEF2F2'; ctx.strokeStyle = '#7C817C'; ctx.lineWidth = Math.max(0.5, 0.03 * u);
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(s * 0.42 * u, -2.07 * u); ctx.lineTo(s * 0.74 * u, -1.98 * u); ctx.lineTo(s * 0.78 * u, -1.84 * u); ctx.lineTo(s * 0.46 * u, -1.9 * u); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = op.noche ? '#FF2A2A' : '#C8102E';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * 0.5 * u, 2.08 * u); ctx.lineTo(s * 0.8 * u, 2.0 * u); ctx.lineTo(s * 0.82 * u, 1.88 * u); ctx.lineTo(s * 0.52 * u, 1.98 * u); ctx.closePath(); ctx.fill(); }
+
+    // franjas de la bandera y láminas reflectivas en las puertas posteriores (se asoman por el costado)
+    if (L >= 40) {
+      const t = Math.max(0.9, 0.06 * u);
+      BANDERA.forEach((c, i) => { ctx.fillStyle = c; for (const s of [-1, 1]) ctx.fillRect(s > 0 ? hw * u - t : -hw * u, (0.55 + i * 0.16) * u, t, 0.16 * u); });
+      ctx.fillStyle = '#E8312F';
+      for (const s of [-1, 1]) { ctx.fillRect(s > 0 ? hw * u - t : -hw * u, -1.55 * u, t, 0.22 * u); ctx.fillRect(s > 0 ? hw * u - t : -hw * u, 1.45 * u, t, 0.22 * u); }
+    }
+
+    // casquete TAXI (blanco, letras rojas) al frente del techo
+    casquete(ctx, u, L, op.noche);
+
+    // código pintado en el techo (negro sobre blanco), legible cuando el carro se ve grande
+    if (op.placa && L >= 58) {
+      const fs = 0.34 * u;
+      ctx.save();
+      ctx.translate(0, 0.62 * u);
+      // que nunca quede de cabeza para quien mira la pantalla
+      const giro = normal(rumbo);
+      if (Math.abs(giro) > Math.PI / 2) ctx.rotate(Math.PI);
+      ctx.font = `800 ${fs}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const w = Math.min(ctx.measureText(op.placa).width, 1.02 * u);
+      ctx.fillStyle = '#111'; ctx.fillText(op.placa, 0, 0, w);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function carroSimple(ctx, u, hl, hw, op) {
+    ctx.fillStyle = '#FFFFFF'; contornoCarro(ctx, u, hl, hw); ctx.fill();
+    ctx.lineWidth = Math.max(1, 0.12 * u); ctx.strokeStyle = '#5F645F'; ctx.stroke();
+    ctx.fillStyle = '#26323A'; ctx.fillRect(-0.62 * u, -0.6 * u, 1.24 * u, 2.0 * u);
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(-0.55 * u, -0.05 * u, 1.1 * u, 1.05 * u);
+    ctx.fillStyle = '#C8102E'; ctx.fillRect(-0.32 * u, 0.0 * u, 0.64 * u, 0.22 * u);
+  }
+
+  function casquete(ctx, u, L, noche) {
+    const w = 0.62 * u, h = 0.24 * u, y0 = 0.02 * u;
+    if (noche) { ctx.save(); ctx.shadowColor = 'rgba(255,90,70,.9)'; ctx.shadowBlur = 0.6 * u; }
+    ctx.fillStyle = '#FFFFFF'; redondo(ctx, -w / 2, y0, w, h, 0.05 * u); ctx.fill();
+    if (noche) ctx.restore();
+    ctx.lineWidth = Math.max(0.6, 0.04 * u); ctx.strokeStyle = '#C8102E'; ctx.stroke();
+    if (L >= 46) {
+      ctx.fillStyle = '#C8102E'; ctx.font = `800 ${0.2 * u}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('TAXI', 0, y0 + h / 2 + 0.01 * u, w * 0.86);
+    } else { ctx.fillStyle = '#C8102E'; ctx.fillRect(-w * 0.32, y0 + h * 0.36, w * 0.64, h * 0.28); }
+  }
+
+  function contornoCarro(ctx, u, hl, hw) {
+    // sedán: trompa un poco más angosta y redondeada, cola recta
+    ctx.beginPath();
+    ctx.moveTo(-0.55 * u, -hl * u);
+    ctx.quadraticCurveTo(0, -(hl + 0.05) * u, 0.55 * u, -hl * u);
+    ctx.bezierCurveTo((hw - 0.05) * u, -(hl - 0.05) * u, hw * u, -(hl - 0.3) * u, hw * u, -(hl - 0.7) * u);
+    ctx.lineTo(hw * u, (hl - 0.45) * u);
+    ctx.bezierCurveTo(hw * u, (hl - 0.12) * u, (hw - 0.12) * u, hl * u, 0.6 * u, hl * u);
+    ctx.quadraticCurveTo(0, (hl + 0.03) * u, -0.6 * u, hl * u);
+    ctx.bezierCurveTo(-(hw - 0.12) * u, hl * u, -hw * u, (hl - 0.12) * u, -hw * u, (hl - 0.45) * u);
+    ctx.lineTo(-hw * u, -(hl - 0.7) * u);
+    ctx.bezierCurveTo(-hw * u, -(hl - 0.3) * u, -(hw - 0.05) * u, -(hl - 0.05) * u, -0.55 * u, -hl * u);
+    ctx.closePath();
+  }
+
+  function redondo(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  const normal = a => { a %= 2 * Math.PI; if (a > Math.PI) a -= 2 * Math.PI; if (a < -Math.PI) a += 2 * Math.PI; return a; };
+
+  /* ---------- chapa: el código del techo, legible, encima del carro ---------- */
+  function chapa(ctx, x, y, placa, op = {}) {
+    const dpr = op.dpr || 1, fs = (op.grande ? 15 : 12.5) * dpr;
+    ctx.save();
+    ctx.font = `800 ${fs}px ${FUENTE}`;
+    const w = ctx.measureText(placa).width + 12 * dpr, h = fs + 7 * dpr;
+    const bx = x - w / 2, by = y - h - (op.alto || 22) * dpr;
+    ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 6 * dpr; ctx.shadowOffsetY = 2 * dpr;
+    ctx.fillStyle = '#FFFFFF'; redondo(ctx, bx, by, w, h, 4 * dpr); ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.lineWidth = 1.6 * dpr; ctx.strokeStyle = '#111'; ctx.stroke();
+    // franjita con los colores de la bandera, como en las puertas
+    const fw = w - 8 * dpr;
+    BANDERA.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(bx + 4 * dpr + i * fw / 3, by + h - 3.2 * dpr, fw / 3, 1.8 * dpr); });
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(placa, x, by + h / 2 - 1 * dpr);
+    if (op.punta !== false) {
+      ctx.beginPath(); ctx.moveTo(x - 4 * dpr, by + h); ctx.lineTo(x, by + h + 5 * dpr); ctx.lineTo(x + 4 * dpr, by + h); ctx.closePath();
+      ctx.fillStyle = '#111'; ctx.fill();
+    }
+    ctx.restore();
+    return [bx, by, w, h];
+  }
+
+  /* ---------- de costado (SVG), con el código en la puerta posterior y en el techo ---------- */
+  function svgLado(placa, op = {}) {
+    placa = String(placa || 'ABC-123').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
+    const titulo = op.titulo || ('Taxi blanco de Chachapoyas, placa ' + placa);
+    const id = 'tx' + Math.random().toString(36).slice(2, 7);
+    return `<svg viewBox="0 0 440 170" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${titulo}">
+<defs>
+<linearGradient id="${id}c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#F4F4F0"/><stop offset="1" stop-color="#D5D7D2"/></linearGradient>
+<linearGradient id="${id}v" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3A4C56"/><stop offset="1" stop-color="#1A2329"/></linearGradient>
+</defs>
+<ellipse cx="220" cy="152" rx="190" ry="9" fill="#000" opacity=".16"/>
+<path d="M30 128 L26 102 Q28 88 44 84 L118 74 Q140 66 166 50 L196 34 Q206 30 220 30 L292 30 Q306 30 316 38 L352 66 Q392 70 410 80 Q418 86 416 100 L414 126 Q412 132 404 132 L374 132 A38 38 0 0 0 298 132 L150 132 A38 38 0 0 0 74 132 L38 132 Q31 132 30 128 Z" fill="url(#${id}c)" stroke="#6E736E" stroke-width="1.6"/>
+<path d="M176 52 L200 38 Q207 35 216 35 L246 35 L246 72 L150 74 Z" fill="url(#${id}v)"/>
+<path d="M254 35 L290 35 Q302 35 310 42 L338 68 L254 72 Z" fill="url(#${id}v)"/>
+<rect x="246" y="35" width="8" height="38" fill="#F2F2EE"/>
+<path d="M150 74 L338 68" stroke="#6E736E" stroke-width="1.2" fill="none"/>
+<path d="M150 78 L150 128 M250 76 L250 128 M346 72 L346 128" stroke="#9AA09A" stroke-width="1.4"/>
+<rect x="198" y="88" width="16" height="4" rx="2" fill="#9AA09A"/><rect x="298" y="86" width="16" height="4" rx="2" fill="#9AA09A"/>
+<g transform="translate(176 96)"><path d="M0 0 H22 V12 Q22 24 11 28 Q0 24 0 12 Z" fill="#D9A21B" stroke="#7A4E10" stroke-width="1.2"/><path d="M4 4 H18 V12 Q18 20 11 23 Q4 20 4 12 Z" fill="#B4232C"/><path d="M11 6 L14 12 L11 18 L8 12 Z" fill="#F4E2A8"/></g>
+<text x="296" y="93" font-family="${FUENTE.replace(/'/g, '')}" font-weight="800" font-size="16" text-anchor="middle" fill="#111" letter-spacing=".6">${placa}</text>
+<rect x="254" y="101" width="46" height="5" fill="${BANDERA[0]}"/><rect x="254" y="106" width="46" height="5" fill="${BANDERA[1]}"/><rect x="254" y="111" width="46" height="5" fill="${BANDERA[2]}"/>
+<rect x="44" y="112" width="18" height="5" fill="#E8312F"/><rect x="384" y="110" width="18" height="5" fill="#E8312F"/>
+<path d="M28 96 L46 92 L50 100 L30 104 Z" fill="#EEF2F2" stroke="#7C817C"/>
+<path d="M404 84 L416 88 L416 100 L404 98 Z" fill="#C8102E"/>
+<path d="M118 74 L124 66 L132 66 L130 74 Z" fill="#E9EAE5" stroke="#7C817C"/>
+<g transform="translate(222 14)"><rect x="0" y="0" width="44" height="16" rx="2.5" fill="#FFFFFF" stroke="#C8102E" stroke-width="1.4"/><text x="22" y="12.5" font-family="${FUENTE.replace(/'/g, '')}" font-weight="800" font-size="12" text-anchor="middle" fill="#C8102E">TAXI</text><rect x="6" y="16" width="32" height="4" fill="#8E938E"/></g>
+${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><circle cx="${cx}" cy="132" r="19" fill="#C9CDCB" stroke="#6E736E" stroke-width="1.5"/><circle cx="${cx}" cy="132" r="5" fill="#6E736E"/>${[0, 72, 144, 216, 288].map(a => `<path d="M${cx} 132 L${(cx + 17 * Math.sin(a * Math.PI / 180)).toFixed(1)} ${(132 - 17 * Math.cos(a * Math.PI / 180)).toFixed(1)}" stroke="#8E938E" stroke-width="3"/>`).join('')}</g>`).join('')}
+</svg>`;
+  }
+
+  /* ---------- movimiento suave por las calles ----------
+   * Cada reporte de GPS llega cada pocos segundos. Entre uno y otro el carro avanza a velocidad pareja por
+   * las calles (ruta más corta en el grafo), dobla en las esquinas y gira el morro con suavidad. */
+  const M = 110574, RAD = Math.PI / 180;
+  class Flota {
+    constructor(grafo) { this.g = grafo; this.m = new Map(); this.kx = Math.cos((grafo && grafo.nodes.length ? grafo.nodes[0][0] : -6.23) * RAD); }
+    dist(a, b) { const dx = (b[1] - a[1]) * this.kx * M, dy = (b[0] - a[0]) * M; return Math.hypot(dx, dy); }
+    rumboDe(a, b) { return Math.atan2((b[1] - a[1]) * this.kx, b[0] - a[0]); }
+    poner(id, lat, lon, ahora = performance.now(), rumboGps = null) {
+      let a = this.m.get(id);
+      if (!a) {
+        a = { id, camino: [[lat, lon]], acum: [0], t0: ahora, dur: 1, ultimo: ahora, rumbo: rumboGps != null ? rumboGps : this.rumboCalle(lat, lon), rumboObj: null, tRumbo: ahora };
+        a.rumboObj = a.rumbo;
+        this.m.set(id, a); return a;
+      }
+      const cur = this.pos(a, ahora);
+      const d = this.dist([cur.lat, cur.lon], [lat, lon]);
+      const intervalo = Math.min(Math.max(ahora - a.ultimo, 900), 7000);
+      a.ultimo = ahora;
+      if (d < 2) { if (rumboGps != null) a.rumboObj = rumboGps; return a; }
+      if (d > 700) { a.camino = [[lat, lon]]; a.acum = [0]; a.t0 = ahora; a.dur = 1; if (rumboGps != null) a.rumbo = a.rumboObj = rumboGps; return a; }
+      const camino = this.porCalles([cur.lat, cur.lon], [lat, lon], d);
+      const acum = [0];
+      for (let i = 1; i < camino.length; i++) acum.push(acum[i - 1] + this.dist(camino[i - 1], camino[i]));
+      a.camino = camino; a.acum = acum; a.t0 = ahora; a.dur = intervalo * 1.05;
+      return a;
+    }
+    porCalles(p, q, d) {
+      const g = this.g;
+      if (!g || d < 12) return [p, q];
+      const n1 = g.cercano(p[0], p[1]), n2 = g.cercano(q[0], q[1]);
+      if (n1 < 0 || n2 < 0 || n1 === n2) return [p, q];
+      const arbol = g.dijkstra(n2, d * 3 + 200);
+      const ruta = g.rutaHacia(arbol, n1);
+      if (!ruta || arbol.dist[n1] > d * 2.6 + 80) return [p, q];
+      let pts = ruta.map(n => g.nodes[n]);
+      // no retroceder hasta el nodo si el carro ya lo pasó (o si el destino queda antes del último nodo)
+      if (pts.length >= 2 && this.atras(p, pts[0], pts[1])) pts = pts.slice(1);
+      if (pts.length >= 2 && this.atras(q, pts[pts.length - 1], pts[pts.length - 2])) pts = pts.slice(0, -1);
+      return [p, ...pts, q];
+    }
+    atras(p, a, b) {   // ¿ir de p a `a` y luego a `b` obliga a dar media vuelta?
+      const v1 = [(a[1] - p[1]) * this.kx, a[0] - p[0]], v2 = [(b[1] - a[1]) * this.kx, b[0] - a[0]];
+      const n1 = Math.hypot(...v1), n2 = Math.hypot(...v2);
+      if (n1 * M < 1 || !n2) return false;
+      return (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2) < -0.3;
+    }
+    rumboCalle(lat, lon) {
+      const g = this.g; if (!g) return 0;
+      const n = g.cercano(lat, lon); if (n < 0 || !g.adj[n].length) return 0;
+      return this.rumboDe(g.nodes[n], g.nodes[g.adj[n][0]]);
+    }
+    pos(a, ahora = performance.now()) {
+      const c = a.camino, ac = a.acum, total = ac[ac.length - 1];
+      const f = a.dur > 1 ? Math.min(1, Math.max(0, (ahora - a.t0) / a.dur)) : 1;
+      const s = f * total;
+      let i = 1; while (i < ac.length - 1 && ac[i] < s) i++;
+      let lat, lon;
+      if (c.length === 1) { lat = c[0][0]; lon = c[0][1]; }
+      else {
+        const k = ac[i] > ac[i - 1] ? (s - ac[i - 1]) / (ac[i] - ac[i - 1]) : 1;
+        lat = c[i - 1][0] + (c[i][0] - c[i - 1][0]) * k; lon = c[i - 1][1] + (c[i][1] - c[i - 1][1]) * k;
+        if (f < 1 && ac[i] - ac[i - 1] > 0.5) a.rumboObj = this.rumboDe(c[i - 1], c[i]);
+      }
+      // el morro gira suave hacia donde va (≈ 0.2 s)
+      const dt = Math.min(0.25, Math.max(0, (ahora - a.tRumbo) / 1000)); a.tRumbo = ahora;
+      a.rumbo += normal(a.rumboObj - a.rumbo) * (1 - Math.exp(-dt / 0.2));
+      return { lat, lon, rumbo: a.rumbo, moviendo: f < 1 };
+    }
+    /* lo que le falta recorrer del tramo actual, desde donde se ve el carro ahora: para que la ruta empiece en el taxi */
+    resto(a, ahora = performance.now()) {
+      const p = this.pos(a, ahora), c = a.camino, ac = a.acum, total = ac[ac.length - 1];
+      const s = (a.dur > 1 ? Math.min(1, Math.max(0, (ahora - a.t0) / a.dur)) : 1) * total;
+      const out = [[p.lat, p.lon]];
+      for (let i = 1; i < c.length; i++) if (ac[i] > s) out.push(c[i]);
+      return out;
+    }
+    rumboFinal(a) {   // hacia dónde mirará al terminar el tramo actual
+      const c = a.camino;
+      for (let i = c.length - 1; i > 0; i--) if (this.dist(c[i - 1], c[i]) > 0.5) return this.rumboDe(c[i - 1], c[i]);
+      return a.rumboObj;
+    }
+    animando(ahora = performance.now()) {
+      for (const a of this.m.values()) if (ahora < a.t0 + a.dur || Math.abs(normal(a.rumboObj - a.rumbo)) > 0.01) return true;
+      return false;
+    }
+    quedarse(ids) { const s = new Set(ids); for (const k of [...this.m.keys()]) if (!s.has(k)) this.m.delete(k); }
+    quitar(id) { this.m.delete(id); }
+  }
+
+  /* tamaño del carro en pantalla: un poco más grande que la realidad para que se vea bien en el celular */
+  function largoEnPantalla(pxPorMetro, minimo = 30) { return Math.max(minimo, Math.min(124, pxPorMetro * MEDIDAS.largo * 2.2)); }
+
+  root.ChasquiTaxi = { dibujar, chapa, svgLado, Flota, largoEnPantalla, MEDIDAS, BANDERA, ESTADOS };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* Chasqui · mapa propio de Chachapoyas sobre <canvas> (OpenStreetMap, sin servidor de mapas).
+ * Casas con techo de teja en relieve, plazas y parques, bosque, chacras, agua y aeropuerto (data/chachapoyas_base.json),
+ * calles con su nombre, lugares con ícono, brújula con el rombo de Kuélap y escala.
+ * Arrastrar (con inercia), pellizcar y rueda para acercar; un toque sin moverse elige un punto.
+ *
+ * Uso: const m = ChasquiMapa.crear({ canvas, grafo, calles, lugares, base, encima(h), alTocar(lat, lon), animar() })
+ *   base     capas de fondo (se pueden poner después con m.ponerBase(json))
+ *   encima   dibuja encima del mapa; h trae: ctx, dpr, col, t, noche, xy, trazo, ruta, rombo, pin, bandera, carro, chapa, rotulo, pxPorMetro
+ *   animar   devuelve true mientras algo se mueve (taxis, pulsos): el mapa se redibuja ~30 veces por segundo
+ */
+(function (root) {
+  'use strict';
+  const M = 110574;
+  const FUENTE = "'Atkinson Hyperlegible','Segoe UI',sans-serif";
+
+  /* Paleta del mapa: día de garúa con techos de teja, y noche de bosque de neblina.
+   * Cada app puede cambiar cualquier color con la variable CSS del mismo nombre (--mapa-suelo, etc.). */
+  const PALETA = {
+    dia: { suelo: '#F0EBE1', casa: '#E0B9A2', muro: '#C59A84', sombra: 'rgba(96,62,44,.20)', borde: 'rgba(120,78,56,.35)',
+      plaza: '#CFE2BC', deporte: '#C3DDB0', bosque: '#DAE6CC', campo: '#ECE9D4', cementerio: '#D9E2D0', agua: '#B8D6E4', aero: '#E5E1D8', pista: '#CBC5B8',
+      calle: '#FFFFFF', calleBorde: '#D8CEBD', mayor: '#FBEFC9', mayorBorde: '#D6BE86', peaton: '#B9A98F',
+      texto: '#4C4A42', textoFuerte: '#1B2620', halo: '#F0EBE1' },
+    noche: { suelo: '#121915', casa: '#3B2B25', muro: '#281D19', sombra: 'rgba(0,0,0,.45)', borde: 'rgba(0,0,0,.35)',
+      plaza: '#1B2D20', deporte: '#1D3121', bosque: '#16241A', campo: '#1A1F18', cementerio: '#1A251C', agua: '#16323D', aero: '#1C211D', pista: '#2C322D',
+      calle: '#2C3530', calleBorde: '#0B100D', mayor: '#4D4532', mayorBorde: '#191610', peaton: '#4E5650',
+      texto: '#B8B5A8', textoFuerte: '#E8E5DA', halo: '#121915' },
+  };
+  const CAPAS_AREA = ['campo', 'bosque', 'cementerio', 'aero', 'deporte', 'plaza', 'agua'];
+
+  /* íconos de lugares: [color, dibujo del glifo en blanco, zoom mínimo en px por metro] */
+  const ICONOS = {
+    hospital: ['#C0392B', 'cruz', 0.7], salud: ['#D06A5E', 'cruz', 2.2], universidad: ['#3F6E8C', 'birrete', 0.7], colegio: ['#5B86A3', 'birrete', 2.0],
+    mercado: ['#B07B22', 'canasta', 0.8], terminal: ['#2E6A4E', 'bus', 0.8], iglesia: ['#7A5A8C', 'iglesia', 1.1], policia: ['#2F4F7A', 'escudo', 1.6],
+    municipio: ['#1F3B2D', 'columnas', 1.0], museo: ['#8C5A3C', 'columnas', 1.4], grifo: ['#6B6F6A', 'surtidor', 1.6], estadio: ['#3E7D45', 'ovalo', 0.9],
+    bomberos: ['#C0392B', 'llama', 1.6], turismo: ['#A23B24', 'rombo', 0.9], teatro: ['#7A5A8C', 'estrella', 1.6], banco: ['#4F5B57', 'sol', 2.2],
+  };
+
+  function decodificar(txt, o) {   // Google Polyline (1e-5) relativa al origen o
+    const pts = []; let i = 0, lat = Math.round(o[0] * 1e5), lon = Math.round(o[1] * 1e5);
+    while (i < txt.length) {
+      for (let c = 0; c < 2; c++) {
+        let r = 0, s = 0, b;
+        do { b = txt.charCodeAt(i++) - 63; r |= (b & 0x1f) << s; s += 5; } while (b >= 0x20);
+        const d = r & 1 ? ~(r >> 1) : r >> 1;
+        if (c === 0) lat += d; else lon += d;
+      }
+      pts.push([lat / 1e5, lon / 1e5]);
+    }
+    return pts;
+  }
+
+  function crear({ canvas, grafo, calles: D, lugares, base, encima, alTocar, animar }) {
     const C = root.Chasqui;
     const ctx = canvas.getContext('2d');
     const centro = grafo.nodes[lugares[0].nodo];
     const kx = Math.cos(centro[0] * Math.PI / 180);
+    const mx = lon => (lon - centro[1]) * kx * M, my = lat => (centro[0] - lat) * M;   // metros desde la plaza
     let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
     for (const p of grafo.nodes) {
       if (C.haversine(centro, p) > 2300) continue;
       if (p[0] < minLat) minLat = p[0]; if (p[0] > maxLat) maxLat = p[0];
       if (p[1] < minLon) minLon = p[1]; if (p[1] > maxLon) maxLon = p[1];
     }
-    let W = 0, H = 0, dpr = 1, col = {}, sucio = true, sMin = 20000;
-    const sMax = 1400000;
+    let W = 0, H = 0, dpr = 1, col = {}, sucio = true, sMin = 20000, noche = false;
+    const sMax = 2200000;
     const vista = { lat: centro[0], lon: centro[1], s: 60000 };   // s = píxeles por grado de latitud
     const aX = lon => W / 2 + (lon - vista.lon) * kx * vista.s;
     const aY = lat => H / 2 + (vista.lat - lat) * vista.s;
     const desde = (x, y) => [vista.lat - (y - H / 2) / vista.s, vista.lon + (x - W / 2) / (kx * vista.s)];
-    const pxPorMetro = () => vista.s / M_POR_GRADO;
+    const pxPorMetro = () => vista.s / M;
+
+    /* ---- calles como trazos ya armados (en metros); se dibujan con una sola transformación ---- */
+    const calleMenor = new Path2D(), calleMayor = new Path2D(), peatonal = new Path2D();
+    for (const w of grafo.ways) {
+      const p = w[0] ? calleMayor : calleMenor;
+      for (let k = 1; k < w.length; k++) { const q = grafo.nodes[w[k]]; if (k === 1) p.moveTo(mx(q[1]), my(q[0])); else p.lineTo(mx(q[1]), my(q[0])); }
+    }
+    for (const w of (D && D.walk) || []) w.forEach((q, k) => k ? peatonal.lineTo(mx(q[1]), my(q[0])) : peatonal.moveTo(mx(q[1]), my(q[0])));
+
+    /* ---- capas de fondo ---- */
+    let capas = null;
+    function ponerBase(b) {
+      if (!b || !b.o) return;
+      const anillo = (txt, p) => { const pts = decodificar(txt, b.o); pts.forEach((q, k) => k ? p.lineTo(mx(q[1]), my(q[0])) : p.moveTo(mx(q[1]), my(q[0]))); p.closePath(); return pts; };
+      const c = { areas: {}, casas: [], rios: new Path2D(), pistas: new Path2D(), lugares: [], plazaArmas: null };
+      for (const n of CAPAS_AREA) { const p = new Path2D(); for (const t of b[n] || []) anillo(t, p); c.areas[n] = p; }
+      // casas en baldosas de 300 m: solo se dibujan las que caen en la pantalla
+      const T = 300, baldosas = new Map();
+      for (const t of b.casas || []) {
+        const pts = decodificar(t, b.o), x0 = mx(pts[0][1]), y0 = my(pts[0][0]);
+        const k = Math.floor(x0 / T) + ':' + Math.floor(y0 / T);
+        let bl = baldosas.get(k);
+        if (!bl) { bl = { p: new Path2D(), x: Math.floor(x0 / T) * T, y: Math.floor(y0 / T) * T }; baldosas.set(k, bl); }
+        pts.forEach((q, i) => i ? bl.p.lineTo(mx(q[1]), my(q[0])) : bl.p.moveTo(mx(q[1]), my(q[0]))); bl.p.closePath();
+      }
+      c.casas = [...baldosas.values()]; c.T = T;
+      for (const t of b.rios || []) decodificar(t, b.o).forEach((q, k) => k ? c.rios.lineTo(mx(q[1]), my(q[0])) : c.rios.moveTo(mx(q[1]), my(q[0])));
+      for (const t of b.pistas || []) decodificar(t, b.o).forEach((q, k) => k ? c.pistas.lineTo(mx(q[1]), my(q[0])) : c.pistas.moveTo(mx(q[1]), my(q[0])));
+      // lugares con ícono, sin repetir los que la app ya marca (Plaza, Mercado…)
+      for (const [tipo, nombre, la, lo] of b.lugares || []) {
+        if (!ICONOS[tipo]) continue;
+        if (lugares.some(l => C.haversine([l.lat ?? grafo.nodes[l.nodo][0], l.lon ?? grafo.nodes[l.nodo][1]], [la, lo]) < 110)) continue;
+        c.lugares.push({ tipo, nombre: nombre.length > 34 ? nombre.slice(0, 32) + '…' : nombre, lat: la, lon: lo });
+      }
+      capas = c; sucio = true;
+    }
 
     function leerColores() {
-      const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
-      col = { surface: g('--surface'), ink: g('--ink'), muted: g('--muted'), street: g('--street'), major: g('--street-major'), edge: g('--street-edge'),
-        manzana: g('--manzana'), accent: g('--accent'), ocre: g('--ocre'), arcilla: g('--arcilla'), neblina: g('--neblina'), softOcre: g('--soft-ocre') };
+      const raiz = document.documentElement, tema = raiz.getAttribute('data-theme');
+      noche = tema === 'dark' || (tema !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+      const cs = getComputedStyle(raiz), g = n => cs.getPropertyValue(n).trim();
+      const pal = PALETA[noche ? 'noche' : 'dia'];
+      col = { surface: g('--surface'), ink: g('--ink'), muted: g('--muted'), accent: g('--accent'), ocre: g('--ocre'), arcilla: g('--arcilla'),
+        neblina: g('--neblina'), softOcre: g('--soft-ocre'), manzana: g('--manzana') };
+      for (const k in pal) col[k] = g('--mapa-' + k) || pal[k];
       sucio = true;
     }
     function medir() {
@@ -890,18 +1304,38 @@ globalThis.CHASQUI_CONFIG = {
       sMin = Math.min((W - 40) / ((maxLon - minLon) * kx), (H - 40) / (maxLat - minLat)) * 0.8;
       sucio = true;
     }
-    function encuadrar(puntos, margen = 70) {
+
+    /* ---- vuelos suaves entre vistas ---- */
+    let vuelo = null;
+    function volar(lat, lon, s, ms = 420) {
+      if (!W || ms <= 0 || matchMedia('(prefers-reduced-motion: reduce)').matches) { vista.lat = lat; vista.lon = lon; vista.s = s; vuelo = null; sucio = true; return; }
+      vuelo = { de: { ...vista }, a: { lat, lon, s }, t0: performance.now(), ms };
+      sucio = true;
+    }
+    function pasoVuelo(ahora) {
+      if (!vuelo) return;
+      const f = Math.min(1, (ahora - vuelo.t0) / vuelo.ms), e = f < 0.5 ? 4 * f * f * f : 1 - Math.pow(-2 * f + 2, 3) / 2;
+      const { de, a } = vuelo;
+      vista.lat = de.lat + (a.lat - de.lat) * e; vista.lon = de.lon + (a.lon - de.lon) * e;
+      vista.s = Math.exp(Math.log(de.s) + (Math.log(a.s) - Math.log(de.s)) * e);
+      if (f >= 1) vuelo = null;
+      sucio = true;
+    }
+    function encuadrar(puntos, margen = 70, op = {}) {
       if (!puntos.length || !W) return;
       let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity;
       for (const p of puntos) { a = Math.min(a, p[0]); b = Math.max(b, p[0]); c = Math.min(c, p[1]); d = Math.max(d, p[1]); }
-      vista.lat = (a + b) / 2; vista.lon = (c + d) / 2;
       const s = Math.min((W - 2 * margen) / Math.max((d - c) * kx, 1e-5), (H - 2 * margen) / Math.max(b - a, 1e-5));
-      vista.s = Math.max(sMin, Math.min(s, 400000));
-      sucio = true;
+      volar((a + b) / 2, (c + d) / 2, Math.max(sMin, Math.min(s, 420000)), op.ms ?? 450);
     }
-    const ciudad = () => encuadrar([[minLat, minLon], [maxLat, maxLon]], 20);
-    function centrar(lat, lon, sMinimo = 140000) { vista.lat = lat; vista.lon = lon; if (vista.s < sMinimo) vista.s = sMinimo; sucio = true; }
-    function zoom(f, x = W / 2, y = H / 2) {
+    const ciudad = () => encuadrar([[minLat, minLon], [maxLat, maxLon]], 20, { ms: 0 });
+    function centrar(lat, lon, sMinimo = 140000) { volar(lat, lon, Math.max(vista.s, sMinimo)); }
+    function zoom(f, x = W / 2, y = H / 2, ms = 0) {
+      if (ms) {   // botones + y −: acercar con suavidad hacia el centro
+        const [la, lo] = desde(x, y), s = Math.max(sMin, Math.min(sMax, vista.s * f));
+        volar(la + (y - H / 2) / s, lo - (x - W / 2) / (kx * s), s, ms); return;
+      }
+      vuelo = null;
       const [la, lo] = desde(x, y);
       vista.s = Math.max(sMin, Math.min(sMax, vista.s * f));
       vista.lat = la + (y - H / 2) / vista.s;
@@ -911,46 +1345,151 @@ globalThis.CHASQUI_CONFIG = {
 
     /* ---- ayudas de dibujo (coordenadas en píxeles del canvas, ya multiplicadas por dpr) ---- */
     const xy = (lat, lon) => [aX(lon) * dpr, aY(lat) * dpr];
+    function linea(lista) {
+      ctx.beginPath();
+      lista.forEach((n, k) => { const p = Array.isArray(n) ? n : grafo.nodes[n]; const x = aX(p[1]) * dpr, y = aY(p[0]) * dpr; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+    }
     function trazo(lista, ancho, color, guion) {
       if (!lista || lista.length < 2) return;
-      ctx.beginPath();
-      lista.forEach((n, k) => { const p = grafo.nodes[n]; const x = aX(p[1]) * dpr, y = aY(p[0]) * dpr; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+      linea(lista);
       ctx.lineWidth = ancho * dpr; ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.setLineDash(guion ? guion.map(g => g * dpr) : []);
       ctx.stroke(); ctx.setLineDash([]);
+    }
+    /* ruta del chasqui: línea con borde y rombitos de Kuélap que avanzan hacia el destino */
+    function ruta(lista, color, op = {}) {
+      if (!lista || lista.length < 2) return;
+      const ancho = op.ancho || 6;
+      linea(lista); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash([]);
+      ctx.lineWidth = (ancho + 4) * dpr; ctx.strokeStyle = noche ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.95)'; ctx.stroke();
+      ctx.lineWidth = ancho * dpr; ctx.strokeStyle = color; ctx.stroke();
+      if (op.rombos === false) return;
+      const paso = 30 * dpr, fase = ((op.t ?? h.t) * 22 * dpr) % paso, r = Math.max(2, ancho * 0.42) * dpr;
+      ctx.fillStyle = noche ? 'rgba(18,25,21,.85)' : 'rgba(255,255,255,.92)';
+      let resto = paso - fase;
+      for (let k = 1; k < lista.length; k++) {
+        const p = Array.isArray(lista[k - 1]) ? lista[k - 1] : grafo.nodes[lista[k - 1]], q = Array.isArray(lista[k]) ? lista[k] : grafo.nodes[lista[k]];
+        const x1 = aX(p[1]) * dpr, y1 = aY(p[0]) * dpr, x2 = aX(q[1]) * dpr, y2 = aY(q[0]) * dpr;
+        const L = Math.hypot(x2 - x1, y2 - y1); if (!L) continue;
+        const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+        while (resto <= L) {
+          const x = x1 + ux * resto, y = y1 + uy * resto;
+          ctx.beginPath(); ctx.moveTo(x + ux * r * 1.5, y + uy * r * 1.5); ctx.lineTo(x - uy * r, y + ux * r); ctx.lineTo(x - ux * r * 1.5, y - uy * r * 1.5); ctx.lineTo(x + uy * r, y - ux * r); ctx.closePath(); ctx.fill();
+          resto += paso;
+        }
+        resto -= L;
+      }
     }
     function rombo(x, y, r, borde, relleno) {
       ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
       if (relleno) { ctx.fillStyle = relleno; ctx.fill(); }
       if (borde) { ctx.lineWidth = 2.5 * dpr; ctx.strokeStyle = borde; ctx.stroke(); }
     }
-    function bandera(x, y) {
-      ctx.strokeStyle = col.ink; ctx.lineWidth = 2.6 * dpr;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 26 * dpr); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x, y - 26 * dpr); ctx.lineTo(x + 17 * dpr, y - 20 * dpr); ctx.lineTo(x, y - 14 * dpr); ctx.closePath();
-      ctx.fillStyle = col.accent; ctx.fill(); ctx.lineWidth = 1.4 * dpr; ctx.strokeStyle = col.surface; ctx.stroke();
-      ctx.beginPath(); ctx.arc(x, y, 3.5 * dpr, 0, Math.PI * 2); ctx.fillStyle = col.ink; ctx.fill();
+    /* alfiler del punto de recojo: rombo de Kuélap sobre un palito, con onda que late */
+    function pin(x, y, color, op = {}) {
+      const p = op.pulso;
+      if (p != null) { ctx.beginPath(); ctx.arc(x, y, (8 + 22 * p) * dpr, 0, Math.PI * 2); ctx.strokeStyle = color + Math.round((1 - p) * 180).toString(16).padStart(2, '0'); ctx.lineWidth = 2 * dpr; ctx.stroke(); }
+      ctx.beginPath(); ctx.ellipse(x, y, 5 * dpr, 2.4 * dpr, 0, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fill();
+      ctx.strokeStyle = col.textoFuerte; ctx.lineWidth = 2.4 * dpr; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 16 * dpr); ctx.stroke();
+      const cy = y - 27 * dpr, r = 12 * dpr;
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 6 * dpr; ctx.shadowOffsetY = 2 * dpr;
+      rombo(x, cy, r, null, color); ctx.restore();
+      ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#fff'; ctx.stroke();
+      rombo(x, cy, r * 0.45, null, '#fff');
     }
+    function bandera(x, y, color) {
+      ctx.beginPath(); ctx.ellipse(x, y, 5 * dpr, 2.4 * dpr, 0, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fill();
+      ctx.strokeStyle = col.textoFuerte; ctx.lineWidth = 2.6 * dpr;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 34 * dpr); ctx.stroke();
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 6 * dpr; ctx.shadowOffsetY = 2 * dpr;
+      ctx.beginPath(); ctx.moveTo(x, y - 34 * dpr); ctx.lineTo(x + 24 * dpr, y - 26.5 * dpr); ctx.lineTo(x, y - 19 * dpr); ctx.closePath();
+      ctx.fillStyle = color || col.accent; ctx.fill(); ctx.restore();
+      ctx.lineWidth = 1.6 * dpr; ctx.strokeStyle = '#fff'; ctx.stroke();
+      rombo(x + 8 * dpr, y - 26.5 * dpr, 3 * dpr, null, '#fff');
+      ctx.beginPath(); ctx.arc(x, y, 3.5 * dpr, 0, Math.PI * 2); ctx.fillStyle = col.textoFuerte; ctx.fill();
+    }
+    /* el taxi blanco de Chachapoyas (core/chasqui-taxi.js) al tamaño que toca para el zoom */
+    function carro(x, y, rumbo, op = {}) {
+      const T = root.ChasquiTaxi; if (!T) return;
+      T.dibujar(ctx, x, y, rumbo, { ...op, largo: T.largoEnPantalla(pxPorMetro(), op.minimo || 30) * dpr, dpr, noche });
+    }
+    function chapa(x, y, placa, op = {}) {
+      const T = root.ChasquiTaxi; if (!T || !placa) return;
+      const L = T.largoEnPantalla(pxPorMetro(), op.minimo || 30);
+      return T.chapa(ctx, x, y, placa, { ...op, dpr, alto: L * 0.5 + 4 });
+    }
+    function rotulo(texto, x, y, color) {
+      ctx.font = `700 ${13.5 * dpr}px ${FUENTE}`;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      const w = ctx.measureText(texto).width;
+      let tx = x + 16 * dpr;
+      if (tx + w > W * dpr - 6 * dpr) tx = x - 16 * dpr - w;
+      ctx.lineWidth = 4.5 * dpr; ctx.strokeStyle = col.halo; ctx.strokeText(texto, tx, y);
+      ctx.fillStyle = color; ctx.fillText(texto, tx, y);
+    }
+    // compatibilidad con apps viejas: punto de color
     function auto(x, y, color, grande) {
       const r = (grande ? 9 : 6) * dpr;
       ctx.beginPath(); ctx.arc(x, y, r + 2.5 * dpr, 0, Math.PI * 2); ctx.fillStyle = col.surface; ctx.fill();
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
     }
-    function rotulo(texto, x, y, color) {
-      ctx.font = `700 ${13.5 * dpr}px 'Atkinson Hyperlegible','Segoe UI',sans-serif`;
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-      const w = ctx.measureText(texto).width;
-      let tx = x + 14 * dpr;
-      if (tx + w > W * dpr - 6 * dpr) tx = x - 14 * dpr - w;
-      ctx.lineWidth = 4.5 * dpr; ctx.strokeStyle = col.surface; ctx.strokeText(texto, tx, y);
-      ctx.fillStyle = color; ctx.fillText(texto, tx, y);
+
+    /* ---- íconos de lugares ---- */
+    function glifo(tipo, x, y, r) {
+      const u = r / 7;
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.4 * u; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      switch (tipo) {
+        case 'cruz': ctx.fillRect(x - 1.3 * u, y - 4 * u, 2.6 * u, 8 * u); ctx.fillRect(x - 4 * u, y - 1.3 * u, 8 * u, 2.6 * u); return;
+        case 'birrete': ctx.moveTo(x, y - 4 * u); ctx.lineTo(x + 5 * u, y - 1.5 * u); ctx.lineTo(x, y + 1 * u); ctx.lineTo(x - 5 * u, y - 1.5 * u); ctx.closePath(); ctx.fill();
+          ctx.fillRect(x - 2.6 * u, y, 5.2 * u, 3 * u); return;
+        case 'canasta': ctx.arc(x, y - 0.5 * u, 3.4 * u, Math.PI, 0); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - 4.6 * u, y - 0.5 * u); ctx.lineTo(x + 4.6 * u, y - 0.5 * u); ctx.lineTo(x + 3.4 * u, y + 4 * u); ctx.lineTo(x - 3.4 * u, y + 4 * u); ctx.closePath(); ctx.fill(); return;
+        case 'bus': ctx.fillRect(x - 4 * u, y - 4 * u, 8 * u, 7 * u); ctx.fillStyle = ICONOS.terminal[0]; ctx.fillRect(x - 3 * u, y - 3 * u, 6 * u, 2.6 * u); ctx.fillStyle = '#fff'; ctx.fillRect(x - 3.5 * u, y + 3 * u, 1.8 * u, 1.5 * u); ctx.fillRect(x + 1.7 * u, y + 3 * u, 1.8 * u, 1.5 * u); return;
+        case 'iglesia': ctx.moveTo(x - 4 * u, y + 4.5 * u); ctx.lineTo(x - 4 * u, y - 0.5 * u); ctx.lineTo(x, y - 3 * u); ctx.lineTo(x + 4 * u, y - 0.5 * u); ctx.lineTo(x + 4 * u, y + 4.5 * u); ctx.closePath(); ctx.fill();
+          ctx.fillRect(x - 0.6 * u, y - 6.5 * u, 1.2 * u, 4 * u); ctx.fillRect(x - 1.8 * u, y - 5.6 * u, 3.6 * u, 1.1 * u); return;
+        case 'escudo': ctx.moveTo(x - 4 * u, y - 4 * u); ctx.lineTo(x + 4 * u, y - 4 * u); ctx.lineTo(x + 4 * u, y); ctx.quadraticCurveTo(x + 3.5 * u, y + 3.5 * u, x, y + 5 * u); ctx.quadraticCurveTo(x - 3.5 * u, y + 3.5 * u, x - 4 * u, y); ctx.closePath(); ctx.fill(); return;
+        case 'columnas': ctx.moveTo(x - 5 * u, y - 2 * u); ctx.lineTo(x, y - 5 * u); ctx.lineTo(x + 5 * u, y - 2 * u); ctx.closePath(); ctx.fill();
+          for (const dx of [-3.5, -0.6, 2.3]) ctx.fillRect(x + dx * u, y - 1.5 * u, 1.3 * u, 4.5 * u); ctx.fillRect(x - 5 * u, y + 3.2 * u, 10 * u, 1.3 * u); return;
+        case 'surtidor': ctx.fillRect(x - 3.5 * u, y - 4 * u, 5 * u, 8.5 * u); ctx.moveTo(x + 1.5 * u, y - 2 * u); ctx.lineTo(x + 4 * u, y); ctx.lineTo(x + 4 * u, y + 3 * u); ctx.stroke(); return;
+        case 'ovalo': ctx.ellipse(x, y, 4.6 * u, 3.2 * u, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y - 3.2 * u); ctx.lineTo(x, y + 3.2 * u); ctx.stroke(); return;
+        case 'llama': ctx.moveTo(x, y - 5 * u); ctx.quadraticCurveTo(x + 5 * u, y, x + 2.5 * u, y + 4.5 * u); ctx.lineTo(x - 2.5 * u, y + 4.5 * u); ctx.quadraticCurveTo(x - 5 * u, y, x, y - 5 * u); ctx.fill(); return;
+        case 'rombo': ctx.moveTo(x, y - 5 * u); ctx.lineTo(x + 4 * u, y); ctx.lineTo(x, y + 5 * u); ctx.lineTo(x - 4 * u, y); ctx.closePath(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y - 2 * u); ctx.lineTo(x + 1.6 * u, y); ctx.lineTo(x, y + 2 * u); ctx.lineTo(x - 1.6 * u, y); ctx.closePath(); ctx.fill(); return;
+        case 'estrella': for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = (i % 2 ? 2 : 4.8) * u; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); return;
+        case 'sol': ctx.font = `800 ${7.5 * u}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('S/', x, y + 0.5 * u); return;
+      }
+    }
+    function iconosLugares(cajas, ppm) {
+      if (!capas) return;
+      const conNombre = ppm >= 1.5;
+      for (const l of capas.lugares) {
+        const [color, g, zmin] = ICONOS[l.tipo];
+        if (ppm < zmin) continue;
+        const x = aX(l.lon), y = aY(l.lat);
+        if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
+        const r = 9;
+        if (cajas.some(b => Math.hypot(b[0] - x, b[1] - y) < b[2] + r)) continue;
+        cajas.push([x, y, r + 2]);
+        const X = x * dpr, Y = y * dpr;
+        ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.22)'; ctx.shadowBlur = 4 * dpr; ctx.shadowOffsetY = 1 * dpr;
+        ctx.beginPath(); ctx.arc(X, Y, r * dpr, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); ctx.restore();
+        ctx.lineWidth = 1.6 * dpr; ctx.strokeStyle = '#fff'; ctx.stroke();
+        glifo(g, X, Y, r * dpr * 0.82);
+        if (conNombre) {
+          ctx.font = `700 ${11.5 * dpr}px ${FUENTE}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+          const tw = ctx.measureText(l.nombre).width / dpr, cx = x + 13 + tw / 2;
+          if (cajas.some(b => Math.abs(b[1] - y) < 12 && Math.abs(b[0] - cx) < b[2] + tw / 2)) continue;
+          cajas.push([cx, y, tw / 2 + 4]);
+          ctx.lineWidth = 3.5 * dpr; ctx.strokeStyle = col.halo; ctx.strokeText(l.nombre, X + 13 * dpr, Y);
+          ctx.fillStyle = color; ctx.fillText(l.nombre, X + 13 * dpr, Y);
+        }
+      }
     }
 
     /* ---- nombres de calles a lo largo de cada calle ---- */
     const anchoTxt = new Map();
     function etiquetasCalles(cajas) {
       if (pxPorMetro() < 0.55) return;
-      ctx.font = `700 ${12.5 * dpr}px 'Atkinson Hyperlegible','Segoe UI',sans-serif`;
+      ctx.font = `700 ${12 * dpr}px ${FUENTE}`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
       const vistos = [];
       grafo.ways.forEach((w, i) => {
@@ -977,57 +1516,114 @@ globalThis.CHASQUI_CONFIG = {
         let ang = Math.atan2(y2 - y1, x2 - x1);
         if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
         ctx.save(); ctx.translate(cx * dpr, cy * dpr); ctx.rotate(ang);
-        ctx.lineWidth = 3.5 * dpr; ctx.strokeStyle = col.manzana; ctx.strokeText(nombre, 0, 0);
-        ctx.fillStyle = col.muted; ctx.fillText(nombre, 0, 0);
+        ctx.lineWidth = 3.5 * dpr; ctx.strokeStyle = w[0] ? col.mayor : col.calle; ctx.strokeText(nombre, 0, 0);
+        ctx.fillStyle = col.texto; ctx.fillText(nombre, 0, 0);
         ctx.restore();
       });
     }
 
+    /* ---- brújula (rombo de Kuélap) y escala ---- */
+    function brujulaYEscala() {
+      const x = 22 * dpr, y = H * dpr - 46 * dpr, r = 11 * dpr;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.18)'; ctx.shadowBlur = 5 * dpr;
+      rombo(x, y, r + 3 * dpr, null, col.surface || '#fff'); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.55, y); ctx.lineTo(x - r * 0.55, y); ctx.closePath(); ctx.fillStyle = col.ocre || '#A23B24'; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x, y + r); ctx.lineTo(x + r * 0.55, y); ctx.lineTo(x - r * 0.55, y); ctx.closePath(); ctx.fillStyle = col.muted || '#777'; ctx.fill();
+      ctx.font = `800 ${10 * dpr}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = col.textoFuerte;
+      ctx.fillText('N', x, y - r - 9 * dpr);
+      // escala: el número redondo de metros que entra en ~90 px
+      const ppm = pxPorMetro(), objetivo = 90 / ppm;
+      const pasos = [10, 20, 50, 100, 200, 500, 1000, 2000];
+      const m = pasos.find(p => p >= objetivo * 0.6) || 2000, w = m * ppm * dpr;
+      const ex = x + 22 * dpr, ey = y + 8 * dpr;
+      ctx.strokeStyle = col.textoFuerte; ctx.lineWidth = 2 * dpr; ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.moveTo(ex, ey - 5 * dpr); ctx.lineTo(ex, ey); ctx.lineTo(ex + w, ey); ctx.lineTo(ex + w, ey - 5 * dpr); ctx.stroke();
+      ctx.font = `700 ${10.5 * dpr}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      const t = m >= 1000 ? m / 1000 + ' km' : m + ' m';
+      ctx.lineWidth = 3 * dpr; ctx.strokeStyle = col.halo; ctx.strokeText(t, ex + w / 2, ey - 6 * dpr);
+      ctx.fillStyle = col.textoFuerte; ctx.fillText(t, ex + w / 2, ey - 6 * dpr);
+    }
+
+    /* ---- dibujo del mapa ---- */
+    const h = { ctx, get dpr() { return dpr; }, get col() { return col; }, get noche() { return noche; }, t: 0,
+      xy, trazo, ruta, rombo, pin, bandera, carro, chapa, rotulo, auto, pxPorMetro };
     function dibujar() {
       if (!W) return;
-      ctx.fillStyle = col.manzana; ctx.fillRect(0, 0, canvas.width, canvas.height);
       const ppm = pxPorMetro();
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      for (const pasada of [0, 1]) {          // borde y relleno; las calles engordan al acercar
-        for (const mayor of [0, 1]) {
-          if (pasada === 0 && ppm < 0.35) continue;
-          const base = Math.max(mayor ? 2.2 : 1.3, (mayor ? 11 : 7.5) * ppm);
-          ctx.strokeStyle = pasada === 0 ? col.edge : (mayor ? col.major : col.street);
-          ctx.lineWidth = (pasada === 0 ? base + 2 : base) * dpr;
-          ctx.beginPath();
-          for (const w of grafo.ways) {
-            if (w[0] !== mayor) continue;
-            for (let k = 1; k < w.length; k++) {
-              const p = grafo.nodes[w[k]], x = aX(p[1]) * dpr, y = aY(p[0]) * dpr;
-              if (k === 1) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-            }
-          }
-          ctx.stroke();
+      h.t = performance.now() / 1000;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = col.suelo; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // de aquí en adelante, coordenadas en metros
+      const xv = mx(vista.lon), yv = my(vista.lat), k = dpr * ppm;
+      const enMetros = (dx = 0, dy = 0) => ctx.setTransform(k, 0, 0, k, dpr * (W / 2 - xv * ppm + dx), dpr * (H / 2 - yv * ppm + dy));
+      enMetros();
+      if (capas) {
+        for (const n of CAPAS_AREA) { ctx.fillStyle = col[n]; ctx.fill(capas.areas[n]); }
+        if (ppm > 0.25) { ctx.lineWidth = Math.max(1.2 / ppm, 2.5); ctx.strokeStyle = col.agua; ctx.lineCap = 'round'; ctx.stroke(capas.rios); }
+        ctx.lineWidth = 30; ctx.strokeStyle = col.pista; ctx.lineCap = 'butt'; ctx.stroke(capas.pistas);
+        // casas: sombra, muro y techo de teja (relieve suave cuando hay zoom)
+        const x0 = xv - W / 2 / ppm - 60, x1 = xv + W / 2 / ppm + 60, y0 = yv - H / 2 / ppm - 60, y1 = yv + H / 2 / ppm + 60;
+        const visibles = capas.casas.filter(b => b.x + capas.T >= x0 && b.x <= x1 && b.y + capas.T >= y0 && b.y <= y1);
+        const alto = ppm >= 0.9 ? Math.min(7, 1.6 * ppm) : 0;
+        if (ppm >= 0.3) {
+          enMetros(-alto * 0.35 - 1.2, alto * 0.25 + 1.2); ctx.fillStyle = col.sombra; for (const b of visibles) ctx.fill(b.p);
         }
+        if (alto) { enMetros(); ctx.fillStyle = col.muro; for (const b of visibles) ctx.fill(b.p); }
+        enMetros(0, -alto); ctx.fillStyle = col.casa; for (const b of visibles) ctx.fill(b.p);
+        if (ppm >= 1.6) { ctx.lineWidth = 0.9 / ppm; ctx.strokeStyle = col.borde; for (const b of visibles) ctx.stroke(b.p); }
+        enMetros();
       }
+      // calles: borde y relleno; engordan al acercar
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const anchoMenor = Math.max(1.3, 6.5 * ppm), anchoMayor = Math.max(2.4, 9.5 * ppm);
+      if (ppm >= 0.3) {
+        ctx.strokeStyle = col.calleBorde; ctx.lineWidth = (anchoMenor + 2) / ppm; ctx.stroke(calleMenor);
+        ctx.strokeStyle = col.mayorBorde; ctx.lineWidth = (anchoMayor + 2.2) / ppm; ctx.stroke(calleMayor);
+      }
+      ctx.strokeStyle = col.calle; ctx.lineWidth = anchoMenor / ppm; ctx.stroke(calleMenor);
+      ctx.strokeStyle = col.mayor; ctx.lineWidth = anchoMayor / ppm; ctx.stroke(calleMayor);
+      if (ppm >= 1.4) { ctx.strokeStyle = col.peaton; ctx.lineWidth = 1.2 / ppm; ctx.setLineDash([3 / ppm, 3 / ppm]); ctx.stroke(peatonal); ctx.setLineDash([]); }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      // pileta de la Plaza de Armas
+      const pl = lugares[0];
+      if (ppm >= 1.3 && pl) {
+        const [x, y] = xy(pl.lat ?? grafo.nodes[pl.nodo][0], pl.lon ?? grafo.nodes[pl.nodo][1]);
+        const r = Math.min(26, 3.2 * ppm) * dpr;
+        ctx.beginPath(); ctx.arc(x, y, r * 1.25, 0, Math.PI * 2); ctx.fillStyle = noche ? '#3A3A33' : '#E9E2D0'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = col.agua; ctx.fill(); ctx.lineWidth = 1.5 * dpr; ctx.strokeStyle = noche ? '#5A5A50' : '#BFB49C'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, r * 0.3, 0, Math.PI * 2); ctx.fillStyle = noche ? '#8A8A80' : '#FFFFFF'; ctx.fill();
+      }
+
+      // lugares de la app (rombo de Kuélap) y luego íconos de OSM
       const cajas = [];
-      ctx.font = `700 ${12.5 * dpr}px 'Atkinson Hyperlegible','Segoe UI',sans-serif`;
+      ctx.font = `700 ${12.5 * dpr}px ${FUENTE}`;
       for (const l of lugares) {
         const p = grafo.nodes[l.nodo], x = aX(p[1]), y = aY(p[0]);
         if (x < -50 || x > W + 50 || y < -20 || y > H + 20) continue;
-        rombo(x * dpr, y * dpr, 4.5 * dpr, col.ink, col.surface);
-        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        ctx.lineWidth = 3.5 * dpr; ctx.strokeStyle = col.manzana; ctx.strokeText(l.nombre, (x + 9) * dpr, y * dpr);
-        ctx.fillStyle = col.ink; ctx.fillText(l.nombre, (x + 9) * dpr, y * dpr);
-        cajas.push([x + 9 + l.nombre.length * 3.4, y, l.nombre.length * 3.6 + 4]);
+        rombo(x * dpr, y * dpr, 5.5 * dpr, col.textoFuerte, col.surface || '#fff');
+        rombo(x * dpr, y * dpr, 2 * dpr, null, col.ocre || '#A23B24');
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+        ctx.lineWidth = 3.5 * dpr; ctx.strokeStyle = col.halo; ctx.strokeText(l.nombre, (x + 10) * dpr, y * dpr);
+        ctx.fillStyle = col.textoFuerte; ctx.fillText(l.nombre, (x + 10) * dpr, y * dpr);
+        cajas.push([x + 10 + l.nombre.length * 3.4, y, l.nombre.length * 3.6 + 4]);
       }
+      iconosLugares(cajas, ppm);
       etiquetasCalles(cajas);
-      if (encima) encima(ayudas);
+      if (encima) encima(h);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      brujulaYEscala();
     }
-    const ayudas = { ctx, get dpr() { return dpr; }, get col() { return col; }, xy, trazo, rombo, bandera, auto, rotulo, pxPorMetro };
 
-    /* ---- gestos: un dedo arrastra, dos dedos acercan, un toque sin moverse elige ---- */
+    /* ---- gestos: un dedo arrastra (con inercia), dos dedos acercan, un toque sin moverse elige ---- */
     const punteros = new Map();
-    let gesto = null;
+    let gesto = null, inercia = null;
     canvas.addEventListener('pointerdown', e => {
       canvas.setPointerCapture(e.pointerId);
+      vuelo = null; inercia = null;
       punteros.set(e.pointerId, [e.offsetX, e.offsetY]);
-      if (punteros.size === 1) gesto = { tipo: 'arrastre', x: e.offsetX, y: e.offsetY, lat: vista.lat, lon: vista.lon, movio: 0 };
+      if (punteros.size === 1) gesto = { tipo: 'arrastre', x: e.offsetX, y: e.offsetY, lat: vista.lat, lon: vista.lon, movio: 0, muestras: [[e.offsetX, e.offsetY, performance.now()]] };
       else if (punteros.size === 2) {
         const [a, b] = [...punteros.values()];
         gesto = { tipo: 'pellizco', d0: Math.hypot(a[0] - b[0], a[1] - b[1]), s0: vista.s, centro: desde((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) };
@@ -1042,39 +1638,71 @@ globalThis.CHASQUI_CONFIG = {
         gesto.movio = Math.max(gesto.movio, Math.hypot(dx, dy));
         if (gesto.movio > 6) canvas.classList.add('arrastrando');
         vista.lat = gesto.lat + dy / vista.s; vista.lon = gesto.lon - dx / (kx * vista.s);
+        gesto.muestras.push([e.offsetX, e.offsetY, performance.now()]); if (gesto.muestras.length > 6) gesto.muestras.shift();
         sucio = true;
       } else if (gesto.tipo === 'pellizco' && punteros.size === 2) {
         const [a, b] = [...punteros.values()];
         vista.s = Math.max(sMin, Math.min(sMax, gesto.s0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / gesto.d0));
-        const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
-        vista.lat = gesto.centro[0] + (my - H / 2) / vista.s;
-        vista.lon = gesto.centro[1] - (mx - W / 2) / (kx * vista.s);
+        const cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2;
+        vista.lat = gesto.centro[0] + (cy - H / 2) / vista.s;
+        vista.lon = gesto.centro[1] - (cx - W / 2) / (kx * vista.s);
         sucio = true;
       }
     });
     function soltar(e) {
       const eraToque = gesto && gesto.tipo === 'arrastre' && gesto.movio <= 6 && punteros.size === 1;
+      if (gesto && gesto.tipo === 'arrastre' && punteros.size === 1 && gesto.movio > 6 && e.type === 'pointerup') {
+        const m = gesto.muestras, a = m[0], b = m[m.length - 1], dt = b[2] - a[2];
+        if (dt > 0 && performance.now() - b[2] < 80) {
+          const vx = (b[0] - a[0]) / dt, vy = (b[1] - a[1]) / dt;   // px por ms
+          if (Math.hypot(vx, vy) > 0.25) inercia = { vx, vy, t: performance.now() };
+        }
+      }
       punteros.delete(e.pointerId);
       canvas.classList.remove('arrastrando');
       if (eraToque && e.type === 'pointerup' && alTocar) { const [la, lo] = desde(e.offsetX, e.offsetY); alTocar(la, lo); }
-      if (punteros.size === 1) { const [p] = [...punteros.values()]; gesto = { tipo: 'arrastre', x: p[0], y: p[1], lat: vista.lat, lon: vista.lon, movio: 99 }; }
+      if (punteros.size === 1) { const [p] = [...punteros.values()]; gesto = { tipo: 'arrastre', x: p[0], y: p[1], lat: vista.lat, lon: vista.lon, movio: 99, muestras: [[p[0], p[1], performance.now()]] }; }
       else gesto = null;
+    }
+    function pasoInercia(ahora) {
+      if (!inercia) return;
+      const dt = Math.min(40, ahora - inercia.t); inercia.t = ahora;
+      vista.lat += inercia.vy * dt / vista.s; vista.lon -= inercia.vx * dt / (kx * vista.s);
+      const f = Math.exp(-dt / 260); inercia.vx *= f; inercia.vy *= f;
+      if (Math.hypot(inercia.vx, inercia.vy) < 0.02) inercia = null;
+      sucio = true;
     }
     canvas.addEventListener('pointerup', soltar);
     canvas.addEventListener('pointercancel', soltar);
     canvas.addEventListener('wheel', e => { e.preventDefault(); zoom(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
+    canvas.addEventListener('dblclick', e => { e.preventDefault(); zoom(1.8, e.offsetX, e.offsetY, 280); });
 
-    function bucle() { if (sucio) { sucio = false; dibujar(); } requestAnimationFrame(bucle); }
+    let ultimo = 0;
+    function bucle(ahora) {
+      pasoVuelo(ahora); pasoInercia(ahora);
+      const mueve = !sucio && animar && animar();
+      if (sucio || (mueve && ahora - ultimo > 32)) { sucio = false; ultimo = ahora; dibujar(); }
+      requestAnimationFrame(bucle);
+    }
     window.addEventListener('resize', medir);
+    if (root.ResizeObserver) new ResizeObserver(() => { const r = canvas.getBoundingClientRect(); if (r.width !== W || r.height !== H) { medir(); dibujar(); } }).observe(canvas);
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', leerColores);
+    new MutationObserver(leerColores).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     leerColores(); medir(); ciudad();
+    if (base) ponerBase(base);
     requestAnimationFrame(bucle);
 
-    return { vista, encuadrar, ciudad, centrar, zoom, desde, pxPorMetro, medir, leerColores,
+    return { vista, encuadrar, ciudad, centrar, zoom, volar, desde, pxPorMetro, medir, leerColores, ponerBase,
+      get noche() { return noche; },
       redibujar() { sucio = true; }, dibujarYa() { sucio = false; dibujar(); } };
   }
 
-  root.ChasquiMapa = { crear };
+  /* Carga las capas de fondo (casas, plazas…) sin frenar el arranque de la app. */
+  function cargarBase(url = 'base.json') {
+    return fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
+  }
+
+  root.ChasquiMapa = { crear, cargarBase, decodificar, PALETA };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -1131,19 +1759,27 @@ globalThis.CHASQUI_CONFIG = {
       const sug = sugerencia();
       if (sug && !st.zonas.length) { const p = grafo.nodes[sug.nodo]; const [x, y] = xy(p[0], p[1]); h.rombo(x, y, 9 * dpr, col.neblina, col.neblina + '40'); }
     }
-    if (st.rutaActual) h.trazo(st.rutaActual, 5, st.metaActual === 'destino' ? col.ocre : col.arcilla);
+    if (st.rutaActual) h.ruta(st.rutaActual, st.metaActual === 'destino' ? col.ocre : col.arcilla, { ancho: 6 });
     for (const v of st.viajes) {
       const enc = v.estado === 'encadenado';
       // sobre la calle (el punto del grafo), igual que la ruta
-      if (v.estado !== 'abordo') { const [x, y] = xy(...grafo.nodes[grafo.cercano(v.origen_lat, v.origen_lon)]); h.rombo(x, y, 10 * dpr, enc ? col.neblina : col.ocre, enc ? null : col.softOcre); if (!enc) h.rotulo('Recoges aquí', x, y, col.ocre); }
-      if (v.estado === 'abordo') { const [x, y] = xy(...grafo.nodes[grafo.cercano(v.destino_lat, v.destino_lon)]); h.bandera(x, y); h.rotulo('Destino', x, y - 20 * dpr, col.accent); }
+      if (v.estado !== 'abordo') {
+        const [x, y] = xy(...grafo.nodes[grafo.cercano(v.origen_lat, v.origen_lon)]);
+        h.pin(x, y, enc ? col.neblina : col.ocre, { pulso: enc ? null : (h.t % 1.8) / 1.8 });
+        if (!enc) h.rotulo('Recoges aquí', x, y - 27 * dpr, col.ocre);
+      }
+      if (v.estado === 'abordo') { const [x, y] = xy(...grafo.nodes[grafo.cercano(v.destino_lat, v.destino_lon)]); h.bandera(x, y, col.accent); h.rotulo('Destino', x + 10 * dpr, y - 26 * dpr, col.accent); }
     }
-    if (st.pos) {
-      const [x, y] = xy(st.pos[0], st.pos[1]);
-      const ocupado = st.viajes.some(v => v.estado === 'abordo');
-      h.auto(x, y, ocupado ? col.ocre : st.conectado ? col.accent : col.muted, true);
+    const a = flota.m.get('yo');
+    if (st.pos && a) {   // tu taxi blanco, con tu código pintado en el techo
+      const p = flota.pos(a), [x, y] = xy(p.lat, p.lon);
+      const ocupado = st.viajes.some(v => v.estado === 'abordo'), yendo = st.viajes.some(v => v.estado === 'asignado');
+      const placa = st.taxista && st.taxista.placa;
+      h.carro(x, y, p.rumbo, { estado: ocupado ? 'abordo' : yendo ? 'recogiendo' : st.conectado ? 'libre' : 'fuera', resaltar: st.conectado || st.viajes.length > 0, pulso: (h.t % 2) / 2, placa, minimo: 44 });
+      if (placa) h.chapa(x, y, placa, { minimo: 44 });
     }
   }
+  const flota = new ChasquiTaxi.Flota(grafo);   // el taxi avanza suave por las calles entre lectura y lectura del GPS
   /* Modo prueba: si estás lejos de Chachapoyas (o sin GPS), tocas el mapa para decir dónde está tu taxi. */
   function modoPrueba(si, motivo) {
     st.modoPrueba = si;
@@ -1154,9 +1790,11 @@ globalThis.CHASQUI_CONFIG = {
     mapa.redibujar();
   }
   const mapa = ChasquiMapa.crear({ canvas: $('mapa'), grafo, calles: D, lugares: LUGARES, encima,
-    alTocar: (la, lo) => { if (st.modoPrueba) { nuevaPos([la, lo], 'prueba'); enviarUbicacion(); } } });   // en prueba, tocar = mover el taxi
-  $('btnMas').addEventListener('click', () => mapa.zoom(1.6));
-  $('btnMenos').addEventListener('click', () => mapa.zoom(1 / 1.6));
+    alTocar: (la, lo) => { if (st.modoPrueba) { nuevaPos([la, lo], 'prueba'); enviarUbicacion(); } },   // en prueba, tocar = mover el taxi
+    animar: () => flota.animando() || st.conectado || st.viajes.length > 0 });
+  ChasquiMapa.cargarBase('base.json').then(b => mapa.ponerBase(b));
+  $('btnMas').addEventListener('click', () => mapa.zoom(1.6, undefined, undefined, 260));
+  $('btnMenos').addEventListener('click', () => mapa.zoom(1 / 1.6, undefined, undefined, 260));
   $('btnGps').addEventListener('click', () => { if (st.pos) mapa.centrar(st.pos[0], st.pos[1], 160000); else pedirGps(); });
 
   /* ---------- avisos, sonido y vibración ---------- */
@@ -1308,11 +1946,13 @@ globalThis.CHASQUI_CONFIG = {
     if (vigia !== null) return;
     vigia = navigator.geolocation.watchPosition(p => {
       if (st.fuentePos === 'caja' || st.fuentePos === 'prueba') return;
-      nuevaPos([p.coords.latitude, p.coords.longitude], 'gps');
+      // el rumbo del GPS solo vale cuando el carro avanza (más de ~4 km/h)
+      const rumbo = p.coords.heading != null && !isNaN(p.coords.heading) && (p.coords.speed || 0) > 1.2 ? p.coords.heading : null;
+      nuevaPos([p.coords.latitude, p.coords.longitude], 'gps', rumbo);
       if (!st.modoPrueba) anotarPunto(p.coords.latitude, p.coords.longitude, p.coords.speed != null ? p.coords.speed * 3.6 : null, p.coords.accuracy, 'celular');
     }, err => { if (!st.pos) modoPrueba(true, err.code === 1 ? 'Sin permiso de ubicación: toca el mapa para decir dónde está tu taxi' : 'Sin GPS: toca el mapa para decir dónde está tu taxi'); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
   }
-  function nuevaPos(pos, fuente) {
+  function nuevaPos(pos, fuente, rumboGrados = null) {
     if (fuente === 'gps' && C.haversine(pos, grafo.nodes[LUGARES[0].nodo]) > 30000) {   // GPS lejos de Chachapoyas
       if (!st.modoPrueba) modoPrueba(true, 'Estás lejos de Chachapoyas. Modo prueba: toca el mapa para ubicar tu taxi.');
       return;
@@ -1320,6 +1960,8 @@ globalThis.CHASQUI_CONFIG = {
     if (fuente === 'prueba' && !st.modoPrueba) modoPrueba(true);
     const primera = !st.pos;
     st.pos = pos; st.fuentePos = fuente;
+    const a = flota.poner('yo', pos[0], pos[1], performance.now(), rumboGrados == null ? null : rumboGrados * Math.PI / 180);
+    st.rumbo = ((flota.rumboFinal(a) * 180 / Math.PI) % 360 + 360) % 360;   // hacia dónde mira, para que los demás lo vean bien orientado
     if (primera) mapa.centrar(pos[0], pos[1], 120000);
     recalcularRuta(); mapa.redibujar();
   }
@@ -1342,6 +1984,7 @@ globalThis.CHASQUI_CONFIG = {
         p_lat: st.pos[0], p_lon: st.pos[1], p_estado: estado,
         p_restante_s: abordo && st.etaS != null ? Math.round(st.etaS) : null,
         p_destino_lat: abordo ? abordo.destino_lat : null, p_destino_lon: abordo ? abordo.destino_lon : null,
+        p_rumbo: st.rumbo == null ? null : Math.round(st.rumbo),
       });
       st.yaAvisoFuera = estado !== 'fuera';
     } catch {} finally { enviando = false; }
