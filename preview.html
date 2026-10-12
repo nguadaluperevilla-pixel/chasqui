@@ -885,21 +885,123 @@ footer p{max-width:80ch;margin:0}
  *   ChasquiTaxi.chapa(ctx, x, y, placa, op)     el código del techo como chapa legible encima del carro
  *   ChasquiTaxi.svgLado(placa, op)              el carro de costado (para la tarjeta del chofer)
  *   new ChasquiTaxi.Flota(grafo)                movimiento suave por las calles entre dos reportes de GPS
- * Medidas de referencia: Chevrolet Sail sedán 2013 (4,249 × 1,690 × 1,505 m; 2,465 m entre ejes).
+ *   ChasquiTaxi.formaDe(marca, modelo)          'sedan' | 'sedan_grande' | 'hatch' | 'station' | 'camioneta'
+ * Cada taxi se dibuja con la forma de su carro (FORMAS): un Sail o un Yaris como sedán, un Corolla como sedán
+ * grande, un Swift como hatchback, un Probox como station wagon, una Ertiga como camioneta. Son formas de
+ * familia con medidas reales, sin logos ni parrillas de marca. El perfil de costado de cada forma lo usan
+ * también la vista 3D (app/taxi.src.html) y svgLado.
+ * Medidas de referencia del sedán: Chevrolet Sail 2013 (4,249 × 1,690 × 1,505 m; 2,465 m entre ejes).
  */
 (function (root) {
   'use strict';
   const MEDIDAS = { largo: 4.249, ancho: 1.690, alto: 1.505, ejes: 2.465 };
+
+  /* ---------- las formas de los taxis ----------
+   * Todo en metros. s = distancia desde la trompa, y = altura sobre el piso.
+   * cuerpo: la lata de abajo de costado (de la trompa abajo, por arriba, hasta la cola abajo)
+   * cabina: techo y parantes de costado; parab y luna: [s, y] abajo y arriba de cada vidrio
+   * ventanas: vidrios de costado; puertas: dónde van las juntas (la última es corta, sobre la rueda)
+   * y dónde van las marcas de la ordenanza: escudo, franjas, código del costado, casquete, código del techo */
+  const FORMAS = {
+    sedan: {
+      nombre: 'Sedán', ejemplos: 'Chevrolet Sail, Toyota Yaris, Kia Rio, Hyundai Accent, Suzuki Dzire, Nissan Versa',
+      largo: 4.249, ancho: 1.69, alto: 1.505, eje1: 0.85, ejes: 2.465, rueda: 0.30, piso: 0.24, maletera: true,
+      cuerpo: [[0.05, 0.24], [0.0, 0.40], [0.02, 0.62], [0.12, 0.74], [0.95, 0.86], [1.45, 0.93], [3.30, 0.97], [3.42, 1.0], [4.10, 0.99], [4.22, 0.94], [4.249, 0.70], [4.235, 0.38], [4.16, 0.24]],
+      cabina: [[1.45, 0.92], [2.12, 1.43], [2.26, 1.495], [3.0, 1.505], [3.13, 1.465], [3.55, 0.99]],
+      parab: [[1.53, 0.985], [2.09, 1.415]], luna: [[3.16, 1.44], [3.50, 1.03]],
+      ventanas: [[[1.64, 1.0], [2.13, 1.40], [2.62, 1.445], [2.62, 1.0]], [[2.70, 1.0], [2.70, 1.445], [3.03, 1.445], [3.32, 1.03]]],
+      puertas: [1.6, 2.66, 3.36], espejo: 1.62, escudo: 2.12, franjas: 2.86, codigo: 2.92, casquete: 2.36, techo: 2.7, reflectivas: [0.28, 3.98],
+    },
+    sedan_grande: {
+      nombre: 'Sedán grande', ejemplos: 'Toyota Corolla, Nissan Sentra, Hyundai Elantra, Kia Cerato',
+      largo: 4.62, ancho: 1.775, alto: 1.46, eje1: 0.92, ejes: 2.70, rueda: 0.31, piso: 0.24, maletera: true,
+      cuerpo: [[0.05, 0.24], [0.0, 0.40], [0.02, 0.62], [0.14, 0.75], [1.05, 0.86], [1.62, 0.93], [3.62, 0.97], [3.75, 1.0], [4.47, 0.99], [4.59, 0.94], [4.62, 0.70], [4.605, 0.38], [4.53, 0.24]],
+      cabina: [[1.62, 0.92], [2.38, 1.39], [2.52, 1.45], [3.30, 1.46], [3.45, 1.42], [3.92, 0.99]],
+      parab: [[1.70, 0.985], [2.35, 1.375]], luna: [[3.48, 1.40], [3.87, 1.03]],
+      ventanas: [[[1.82, 1.0], [2.38, 1.36], [2.90, 1.40], [2.90, 1.0]], [[2.98, 1.0], [2.98, 1.40], [3.36, 1.40], [3.70, 1.03]]],
+      puertas: [1.78, 2.94, 3.72], espejo: 1.80, escudo: 2.36, franjas: 3.18, codigo: 3.24, casquete: 2.62, techo: 2.98, reflectivas: [0.30, 4.35],
+    },
+    hatch: {
+      nombre: 'Hatchback', ejemplos: 'Suzuki Swift, Toyota Yaris hatchback, Kia Rio hatchback, Nissan March',
+      largo: 3.94, ancho: 1.695, alto: 1.51, eje1: 0.72, ejes: 2.51, rueda: 0.30, piso: 0.24, maletera: false,
+      cuerpo: [[0.05, 0.24], [0.0, 0.40], [0.02, 0.62], [0.12, 0.74], [0.85, 0.87], [1.30, 0.93], [3.60, 0.99], [3.86, 0.99], [3.93, 0.92], [3.94, 0.70], [3.925, 0.38], [3.85, 0.24]],
+      cabina: [[1.30, 0.92], [1.98, 1.44], [2.12, 1.505], [3.40, 1.50], [3.58, 1.45], [3.84, 0.99]],
+      parab: [[1.38, 0.985], [1.95, 1.42]], luna: [[3.60, 1.42], [3.82, 1.03]],
+      ventanas: [[[1.49, 1.0], [1.99, 1.41], [2.48, 1.45], [2.48, 1.0]], [[2.56, 1.0], [2.56, 1.45], [3.10, 1.45], [3.22, 1.0]]],
+      puertas: [1.45, 2.52, 3.28], espejo: 1.47, escudo: 1.98, franjas: 2.86, codigo: 2.92, casquete: 2.25, techo: 2.85, reflectivas: [0.26, 3.70],
+    },
+    station: {
+      nombre: 'Station wagon', ejemplos: 'Toyota Probox y Succeed, Toyota Corolla Fielder, Nissan AD, Nissan Wingroad',
+      largo: 4.245, ancho: 1.69, alto: 1.525, eje1: 0.80, ejes: 2.55, rueda: 0.30, piso: 0.24, maletera: false,
+      cuerpo: [[0.05, 0.24], [0.0, 0.40], [0.02, 0.62], [0.12, 0.75], [0.90, 0.87], [1.38, 0.94], [3.90, 0.99], [4.18, 0.99], [4.235, 0.92], [4.245, 0.70], [4.23, 0.38], [4.16, 0.24]],
+      cabina: [[1.38, 0.93], [2.02, 1.45], [2.16, 1.52], [3.98, 1.525], [4.12, 1.49], [4.20, 0.99]],
+      parab: [[1.46, 0.995], [2.0, 1.43]], luna: [[4.14, 1.46], [4.19, 1.04]],
+      ventanas: [[[1.57, 1.0], [2.03, 1.42], [2.52, 1.47], [2.52, 1.0]], [[2.60, 1.0], [2.60, 1.47], [3.28, 1.47], [3.28, 1.0]], [[3.36, 1.0], [3.36, 1.47], [3.98, 1.47], [4.08, 1.0]]],
+      puertas: [1.53, 2.56, 3.32], espejo: 1.55, escudo: 2.04, franjas: 2.92, codigo: 2.98, casquete: 2.30, techo: 3.0, reflectivas: [0.27, 4.0],
+    },
+    camioneta: {
+      nombre: 'Camioneta', ejemplos: 'Suzuki Ertiga, Toyota Avanza y Rush, Chevrolet Spin, Nissan Kicks',
+      largo: 4.395, ancho: 1.735, alto: 1.69, eje1: 0.78, ejes: 2.74, rueda: 0.32, piso: 0.28, maletera: false, barras: true,
+      cuerpo: [[0.05, 0.28], [0.0, 0.45], [0.02, 0.70], [0.14, 0.84], [0.95, 0.97], [1.30, 1.03], [4.05, 1.06], [4.33, 1.06], [4.385, 0.98], [4.395, 0.76], [4.38, 0.42], [4.30, 0.28]],
+      cabina: [[1.30, 1.02], [2.05, 1.60], [2.20, 1.67], [4.10, 1.69], [4.25, 1.65], [4.36, 1.06]],
+      parab: [[1.38, 1.08], [2.02, 1.585]], luna: [[4.28, 1.62], [4.34, 1.11]],
+      ventanas: [[[1.50, 1.08], [2.05, 1.56], [2.56, 1.62], [2.56, 1.08]], [[2.64, 1.08], [2.64, 1.62], [3.40, 1.62], [3.40, 1.08]], [[3.48, 1.08], [3.48, 1.62], [4.12, 1.62], [4.22, 1.08]]],
+      puertas: [1.46, 2.60, 3.44], espejo: 1.50, escudo: 2.03, franjas: 3.0, codigo: 3.06, casquete: 2.32, techo: 3.05, reflectivas: [0.27, 4.12],
+    },
+  };
+  for (const k in FORMAS) FORMAS[k].clave = k;
+
+  /* ¿Qué forma tiene este carro? Por la marca y el modelo que escribe el taxista. Lo mismo hace la base de
+   * datos en public.forma_carro (supabase/010_forma_carro.sql): si se cambia aquí, cambiarlo allá. */
+  const PATRONES = [
+    ['station', /(probox|succeed|fielder|caldina|wingroad|wing road| ad van| advan|nissan ad |station|wagon|touring|familiar|estate|sportwagon| sw )/],
+    ['camioneta', /(avanza|rush|ertiga|xl7|xl 7| spin|livina|rav ?4|cr-?v|hr-?v|tucson|sportage|creta|kona|x-?trail|qashqai|vitara|duster|captiva|tracker|seltos|sonet|venue|kicks|terios|ecosport|veloz|innova|xpander|sienta|carens|suv|camioneta|minivan)/],
+    ['hatch', /(hatch| hb )/],
+    ['hatch', /(swift|baleno|celerio|spark|picanto|morning| i10| i20|march|tiida| note| fit | jazz|vitz|polo| gol |clio|sandero|kwid|mirage|s-?presso|sirion|starlet|aqua|prius c)/],
+    ['sedan_grande', /(corolla|sentra|elantra|cerato| k3|civic|altima|camry|mazda ?3|jetta|cruze|lancer|sylphy|premio|allion|axio|bluebird|optima)/],
+  ];
+  function formaDe(marca, modelo) {
+    const t = ' ' + (String(marca || '') + ' ' + String(modelo || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 -]/g, ' ') + ' ';
+    if (/sedan/.test(t)) return PATRONES[4][1].test(t) ? 'sedan_grande' : 'sedan';   // «Grand i10 sedán»: lo que dice el taxista manda
+    for (const [k, re] of PATRONES) if (re.test(t)) return k;
+    return 'sedan';
+  }
+  const forma = k => FORMAS[k] || FORMAS.sedan;
+  function techoEn(F, s) {   // altura del techo en s (por la línea de la cabina)
+    const c = F.cabina;
+    for (let i = 1; i < c.length; i++) if (c[i][0] >= s) { const k = (s - c[i - 1][0]) / (c[i][0] - c[i - 1][0] || 1); return c[i - 1][1] + (c[i][1] - c[i - 1][1]) * k; }
+    return F.alto;
+  }
   const BANDERA = ['#3FA9E0', '#5B6B1E', '#C8102E'];        // celeste, verde olivo, rojo escarlata
   const FUENTE = "'Big Shoulders Display','Arial Narrow','Segoe UI',sans-serif";
   const ESTADOS = { libre: '#2E9A63', recogiendo: '#C98A1E', viaje: '#B4412A', abordo: '#B4412A', encadenado: '#4A87A0', fuera: '#8A918C' };
 
   /* ---------- vista desde arriba ----------
    * El carro mira hacia arriba (y negativo) y se gira `rumbo` radianes en sentido horario (0 = norte).
-   * op: { largo: px, placa, estado, color, resaltar, noche, dpr, pulso (0..1) } */
+   * op: { largo: px (de un sedán; los demás salen a su medida), forma, placa, estado, color, resaltar, noche, dpr, pulso (0..1) } */
+  /* Con cientos de taxis en pantalla, cada carro sin código ni pulso se pinta una sola vez por forma, estado y
+   * tamaño en un lienzo aparte, y después solo se estampa girado (la sombra gira con el carro: no se nota). */
+  const SELLOS = new Map();
   function dibujar(ctx, x, y, rumbo, op = {}) {
-    const L = op.largo || 34, u = L / MEDIDAS.largo;          // u = píxeles por metro del dibujo
-    const hl = MEDIDAS.largo / 2, hw = MEDIDAS.ancho / 2;
+    if (op.placa || op.resaltar || typeof document === 'undefined') return dibujarDirecto(ctx, x, y, rumbo, op);
+    const L = Math.round(op.largo || 34);
+    const clave = (op.forma || 'sedan') + '|' + (op.estado || '') + '|' + (op.color || '') + '|' + L + '|' + (op.noche ? 1 : 0) + '|' + (op.dpr || 1);
+    let s = SELLOS.get(clave);
+    if (!s) {
+      if (SELLOS.size > 240) SELLOS.clear();   // al hacer zoom cambian los tamaños: se rehace lo que se use
+      const R = Math.ceil(L * (op.noche ? 1.75 : 0.72) + 2), c = document.createElement('canvas');
+      c.width = c.height = 2 * R;
+      dibujarDirecto(c.getContext('2d'), R, R, 0, { ...op, largo: L });
+      s = { c, R }; SELLOS.set(clave, s);
+    }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rumbo); ctx.drawImage(s.c, -s.R, -s.R); ctx.restore();
+  }
+  function dibujarDirecto(ctx, x, y, rumbo, op = {}) {
+    const F = forma(op.forma);
+    const L = op.largo || 34, u = L / MEDIDAS.largo;          // u = píxeles por metro del dibujo (igual para todas las formas)
+    const hl = F.largo / 2, hw = F.ancho / 2;
+    const Y = s => (s - hl) * u;                               // de «metros desde la trompa» a píxeles del dibujo
+    const yV0 = F.parab[0][0], yT0 = F.parab[1][0], yT1 = F.luna[0][0], yV1 = F.luna[1][0];   // vidrios y techo, en s
     const anillo = op.color || ESTADOS[op.estado] || null;
     const dpr = op.dpr || 1;
     ctx.save();
@@ -934,7 +1036,7 @@ footer p{max-width:80ch;margin:0}
       ctx.closePath(); ctx.fill();
     }
 
-    if (L < 20) { carroSimple(ctx, u, hl, hw, op); ctx.restore(); return; }
+    if (L < 20) { carroSimple(ctx, u, hl, hw, F, Y); ctx.restore(); return; }
 
     // carrocería blanca con volumen (más clara al centro, como un capó curvo)
     const cuerpo = ctx.createLinearGradient(-hw * u, 0, hw * u, 0);
@@ -942,67 +1044,77 @@ footer p{max-width:80ch;margin:0}
     cuerpo.addColorStop(0.82, '#F7F7F3'); cuerpo.addColorStop(1, '#D3D5CF');
     // espejos
     ctx.fillStyle = '#E9EAE5'; ctx.strokeStyle = '#7C817C'; ctx.lineWidth = Math.max(0.6, 0.035 * u);
+    const e0 = Y(F.espejo - 0.12), e1 = Y(F.espejo + 0.08);
     for (const s of [-1, 1]) {
-      ctx.beginPath(); ctx.moveTo(s * hw * u, -0.62 * u); ctx.lineTo(s * (hw + 0.17) * u, -0.56 * u);
-      ctx.lineTo(s * (hw + 0.17) * u, -0.43 * u); ctx.lineTo(s * hw * u, -0.42 * u); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(s * hw * u, e0); ctx.lineTo(s * (hw + 0.17) * u, e0 + 0.06 * u);
+      ctx.lineTo(s * (hw + 0.17) * u, e1 - 0.01 * u); ctx.lineTo(s * hw * u, e1); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
     ctx.fillStyle = cuerpo;
-    contornoCarro(ctx, u, hl, hw); ctx.fill();
+    contornoCarro(ctx, u, hl, hw, F); ctx.fill();
     ctx.lineWidth = Math.max(0.8, 0.05 * u); ctx.strokeStyle = '#6E736E'; ctx.stroke();
 
     // cabina de vidrio (parabrisas, ventanas de los costados y luna trasera)
-    const vidrio = ctx.createLinearGradient(0, -0.62 * u, 0, 1.45 * u);
+    const cw = hw - 0.185, bP = Y(F.puertas[1]);              // medio ancho de la cabina y el parante B
+    const vidrio = ctx.createLinearGradient(0, Y(yV0), 0, Y(yV1));
     vidrio.addColorStop(0, '#2C3A42'); vidrio.addColorStop(0.5, '#1C252B'); vidrio.addColorStop(1, '#33444D');
     ctx.fillStyle = vidrio;
     ctx.beginPath();
-    ctx.moveTo(-0.66 * u, -0.60 * u); ctx.quadraticCurveTo(0, -0.74 * u, 0.66 * u, -0.60 * u);
-    ctx.lineTo(0.70 * u, 0.55 * u); ctx.lineTo(0.64 * u, 1.43 * u);
-    ctx.quadraticCurveTo(0, 1.52 * u, -0.64 * u, 1.43 * u); ctx.lineTo(-0.70 * u, 0.55 * u); ctx.closePath(); ctx.fill();
+    ctx.moveTo(-(cw - 0.04) * u, Y(yV0)); ctx.quadraticCurveTo(0, Y(yV0 - 0.14), (cw - 0.04) * u, Y(yV0));
+    ctx.lineTo(cw * u, bP); ctx.lineTo((cw - 0.06) * u, Y(yV1));
+    ctx.quadraticCurveTo(0, Y(yV1 + (F.maletera ? 0.09 : 0.03)), -(cw - 0.06) * u, Y(yV1)); ctx.lineTo(-cw * u, bP); ctx.closePath(); ctx.fill();
     // reflejo del cielo en el parabrisas
     if (L >= 30) {
       ctx.fillStyle = 'rgba(190,215,230,.22)';
-      ctx.beginPath(); ctx.moveTo(-0.5 * u, -0.58 * u); ctx.lineTo(-0.1 * u, -0.64 * u); ctx.lineTo(-0.35 * u, -0.12 * u); ctx.lineTo(-0.58 * u, -0.1 * u); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-0.5 * u, Y(yV0 + 0.02)); ctx.lineTo(-0.1 * u, Y(yV0 - 0.04)); ctx.lineTo(-0.35 * u, Y(yT0 - 0.04)); ctx.lineTo(-0.58 * u, Y(yT0 - 0.02)); ctx.closePath(); ctx.fill();
     }
     // techo blanco con parantes
-    const techo = ctx.createLinearGradient(-0.6 * u, 0, 0.6 * u, 0);
+    const rw = cw - 0.06;
+    const techo = ctx.createLinearGradient(-rw * u, 0, rw * u, 0);
     techo.addColorStop(0, '#E6E7E2'); techo.addColorStop(0.5, '#FFFFFF'); techo.addColorStop(1, '#E2E3DE');
     ctx.fillStyle = techo;
-    redondo(ctx, -0.6 * u, -0.08 * u, 1.2 * u, 1.13 * u, 0.16 * u); ctx.fill();
+    redondo(ctx, -rw * u, Y(yT0), 2 * rw * u, Y(yT1) - Y(yT0), 0.16 * u); ctx.fill();
     ctx.lineWidth = Math.max(0.5, 0.03 * u); ctx.strokeStyle = '#9CA19B'; ctx.stroke();
     ctx.fillStyle = '#F2F3EF';
-    for (const s of [-1, 1]) ctx.fillRect(s > 0 ? 0.6 * u : -0.72 * u, 0.42 * u, 0.12 * u, 0.1 * u);   // parante B
+    for (const s of [-1, 1]) ctx.fillRect(s > 0 ? rw * u : -cw * u, bP - 0.1 * u, (cw - rw) * u, 0.1 * u);   // parante B
+    if (!F.maletera) for (const s of [-1, 1]) ctx.fillRect(s > 0 ? rw * u : -cw * u, Y(yT1 - 0.45), (cw - rw) * u, 0.12 * u);   // parante C
+    if (F.barras) {   // barras del techo de la camioneta
+      ctx.fillStyle = '#3C403E';
+      for (const s of [-1, 1]) redondo(ctx, s * (rw - 0.1) * u - 0.03 * u, Y(yT0 + 0.15), 0.06 * u, Y(yT1 - 0.12) - Y(yT0 + 0.15), 0.03 * u), ctx.fill();
+    }
 
-    // capó y maletera: líneas de las tapas
+    // capó y maletera (o portón): líneas de las tapas
     if (L >= 30) {
       ctx.strokeStyle = 'rgba(110,115,110,.55)'; ctx.lineWidth = Math.max(0.5, 0.025 * u);
-      ctx.beginPath(); ctx.moveTo(-0.62 * u, -1.98 * u); ctx.quadraticCurveTo(0, -2.06 * u, 0.62 * u, -1.98 * u); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-0.3 * u, -1.9 * u); ctx.lineTo(-0.22 * u, -0.85 * u); ctx.moveTo(0.3 * u, -1.9 * u); ctx.lineTo(0.22 * u, -0.85 * u); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-0.66 * u, 1.62 * u); ctx.quadraticCurveTo(0, 1.58 * u, 0.66 * u, 1.62 * u); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-0.62 * u, Y(0.14)); ctx.quadraticCurveTo(0, Y(0.06), 0.62 * u, Y(0.14)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-0.3 * u, Y(0.22)); ctx.lineTo(-0.22 * u, Y(yV0 - 0.25)); ctx.moveTo(0.3 * u, Y(0.22)); ctx.lineTo(0.22 * u, Y(yV0 - 0.25)); ctx.stroke();
+      if (F.maletera) { ctx.beginPath(); ctx.moveTo(-0.66 * u, Y(yV1 + 0.24)); ctx.quadraticCurveTo(0, Y(yV1 + 0.2), 0.66 * u, Y(yV1 + 0.24)); ctx.stroke(); }
     }
     // faros y luces traseras
     ctx.fillStyle = op.noche ? '#FFF4C8' : '#EEF2F2'; ctx.strokeStyle = '#7C817C'; ctx.lineWidth = Math.max(0.5, 0.03 * u);
     for (const s of [-1, 1]) {
-      ctx.beginPath(); ctx.moveTo(s * 0.42 * u, -2.07 * u); ctx.lineTo(s * 0.74 * u, -1.98 * u); ctx.lineTo(s * 0.78 * u, -1.84 * u); ctx.lineTo(s * 0.46 * u, -1.9 * u); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(s * 0.42 * u, Y(0.055)); ctx.lineTo(s * (hw - 0.105) * u, Y(0.145)); ctx.lineTo(s * (hw - 0.065) * u, Y(0.285)); ctx.lineTo(s * 0.46 * u, Y(0.225)); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
     ctx.fillStyle = op.noche ? '#FF2A2A' : '#C8102E';
-    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * 0.5 * u, 2.08 * u); ctx.lineTo(s * 0.8 * u, 2.0 * u); ctx.lineTo(s * 0.82 * u, 1.88 * u); ctx.lineTo(s * 0.52 * u, 1.98 * u); ctx.closePath(); ctx.fill(); }
+    const cola = F.largo;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * 0.5 * u, Y(cola - 0.045)); ctx.lineTo(s * (hw - 0.045) * u, Y(cola - 0.125)); ctx.lineTo(s * (hw - 0.025) * u, Y(cola - 0.245)); ctx.lineTo(s * 0.52 * u, Y(cola - 0.145)); ctx.closePath(); ctx.fill(); }
 
     // franjas de la bandera y láminas reflectivas en las puertas posteriores (se asoman por el costado)
     if (L >= 40) {
-      const t = Math.max(0.9, 0.06 * u);
-      BANDERA.forEach((c, i) => { ctx.fillStyle = c; for (const s of [-1, 1]) ctx.fillRect(s > 0 ? hw * u - t : -hw * u, (0.55 + i * 0.16) * u, t, 0.16 * u); });
+      const t = Math.max(0.9, 0.06 * u), f0 = F.franjas - 0.24;
+      BANDERA.forEach((c, i) => { ctx.fillStyle = c; for (const s of [-1, 1]) ctx.fillRect(s > 0 ? hw * u - t : -hw * u, Y(f0 + i * 0.16), t, 0.16 * u); });
       ctx.fillStyle = '#E8312F';
-      for (const s of [-1, 1]) { ctx.fillRect(s > 0 ? hw * u - t : -hw * u, -1.55 * u, t, 0.22 * u); ctx.fillRect(s > 0 ? hw * u - t : -hw * u, 1.45 * u, t, 0.22 * u); }
+      // (van en las esquinas de los parachoques; desde arriba se ven donde la lata ya es recta)
+      for (const s of [-1, 1]) for (const r of F.reflectivas) ctx.fillRect(s > 0 ? hw * u - t : -hw * u, Y(Math.min(Math.max(r, 0.6), F.largo - 0.55) - 0.11), t, 0.22 * u);
     }
 
     // casquete TAXI (blanco, letras rojas) al frente del techo
-    casquete(ctx, u, L, op.noche);
+    casquete(ctx, u, L, op.noche, Y(F.casquete) - 0.12 * u);
 
     // código pintado en el techo (negro sobre blanco), legible cuando el carro se ve grande
     if (op.placa && L >= 58) {
       const fs = 0.34 * u;
       ctx.save();
-      ctx.translate(0, 0.62 * u);
+      ctx.translate(0, Y(F.techo) + 0.04 * u);
       // que nunca quede de cabeza para quien mira la pantalla
       const giro = normal(rumbo);
       if (Math.abs(giro) > Math.PI / 2) ctx.rotate(Math.PI);
@@ -1014,16 +1126,16 @@ footer p{max-width:80ch;margin:0}
     ctx.restore();
   }
 
-  function carroSimple(ctx, u, hl, hw, op) {
-    ctx.fillStyle = '#FFFFFF'; contornoCarro(ctx, u, hl, hw); ctx.fill();
+  function carroSimple(ctx, u, hl, hw, F, Y) {
+    ctx.fillStyle = '#FFFFFF'; contornoCarro(ctx, u, hl, hw, F); ctx.fill();
     ctx.lineWidth = Math.max(1, 0.12 * u); ctx.strokeStyle = '#5F645F'; ctx.stroke();
-    ctx.fillStyle = '#26323A'; ctx.fillRect(-0.62 * u, -0.6 * u, 1.24 * u, 2.0 * u);
-    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(-0.55 * u, -0.05 * u, 1.1 * u, 1.05 * u);
-    ctx.fillStyle = '#C8102E'; ctx.fillRect(-0.32 * u, 0.0 * u, 0.64 * u, 0.22 * u);
+    ctx.fillStyle = '#26323A'; ctx.fillRect(-0.62 * u, Y(F.parab[0][0]), 1.24 * u, Y(F.luna[1][0]) - Y(F.parab[0][0]));
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(-0.55 * u, Y(F.parab[1][0]), 1.1 * u, Y(F.luna[0][0]) - Y(F.parab[1][0]));
+    ctx.fillStyle = '#C8102E'; ctx.fillRect(-0.32 * u, Y(F.casquete) - 0.12 * u, 0.64 * u, 0.22 * u);
   }
 
-  function casquete(ctx, u, L, noche) {
-    const w = 0.62 * u, h = 0.24 * u, y0 = 0.02 * u;
+  function casquete(ctx, u, L, noche, y0) {
+    const w = 0.62 * u, h = 0.24 * u;
     if (noche) { ctx.save(); ctx.shadowColor = 'rgba(255,90,70,.9)'; ctx.shadowBlur = 0.6 * u; }
     ctx.fillStyle = '#FFFFFF'; redondo(ctx, -w / 2, y0, w, h, 0.05 * u); ctx.fill();
     if (noche) ctx.restore();
@@ -1034,16 +1146,17 @@ footer p{max-width:80ch;margin:0}
     } else { ctx.fillStyle = '#C8102E'; ctx.fillRect(-w * 0.32, y0 + h * 0.36, w * 0.64, h * 0.28); }
   }
 
-  function contornoCarro(ctx, u, hl, hw) {
-    // sedán: trompa un poco más angosta y redondeada, cola recta
+  function contornoCarro(ctx, u, hl, hw, F) {
+    // trompa un poco más angosta y redondeada; la cola recta (más cuadrada en los que tienen portón)
+    const c = F && !F.maletera ? 0.3 : 0.45, k = F && !F.maletera ? 0.07 : 0.12;
     ctx.beginPath();
     ctx.moveTo(-0.55 * u, -hl * u);
     ctx.quadraticCurveTo(0, -(hl + 0.05) * u, 0.55 * u, -hl * u);
     ctx.bezierCurveTo((hw - 0.05) * u, -(hl - 0.05) * u, hw * u, -(hl - 0.3) * u, hw * u, -(hl - 0.7) * u);
-    ctx.lineTo(hw * u, (hl - 0.45) * u);
-    ctx.bezierCurveTo(hw * u, (hl - 0.12) * u, (hw - 0.12) * u, hl * u, 0.6 * u, hl * u);
+    ctx.lineTo(hw * u, (hl - c) * u);
+    ctx.bezierCurveTo(hw * u, (hl - k) * u, (hw - k) * u, hl * u, 0.6 * u, hl * u);
     ctx.quadraticCurveTo(0, (hl + 0.03) * u, -0.6 * u, hl * u);
-    ctx.bezierCurveTo(-(hw - 0.12) * u, hl * u, -hw * u, (hl - 0.12) * u, -hw * u, (hl - 0.45) * u);
+    ctx.bezierCurveTo(-(hw - k) * u, hl * u, -hw * u, (hl - k) * u, -hw * u, (hl - c) * u);
     ctx.lineTo(-hw * u, -(hl - 0.7) * u);
     ctx.bezierCurveTo(-hw * u, -(hl - 0.3) * u, -(hw - 0.05) * u, -(hl - 0.05) * u, -0.55 * u, -hl * u);
     ctx.closePath();
@@ -1141,29 +1254,50 @@ ${ln('M26 46 C30 52 34 56 40 58 M34 40 C38 44 42 48 46 50 M30 70 C32 76 30 82 26
     const numero = String(op.numero || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 10);   // número de registro municipal
     const titulo = op.titulo || ('Taxi blanco de Chachapoyas, placa ' + placa);
     const id = 'tx' + Math.random().toString(36).slice(2, 7);
-    return `<svg viewBox="0 0 440 170" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${titulo}">
+    const F = forma(op.forma);
+    // el mismo perfil que la vista 3D: s (metros desde la trompa) a la izquierda, 90 px por metro
+    const S = 90, G = 172, x0 = (440 - F.largo * S) / 2;
+    const X = s => +(x0 + s * S).toFixed(1), Yv = y => +(G - y * S).toFixed(1), P = ([s, y]) => X(s) + ' ' + Yv(y);
+    const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const suave = (pts, cerrado) => {   // esquinas redondeadas: curvas por los puntos medios
+      if (cerrado) return 'M' + P(mid(pts[pts.length - 1], pts[0])) + pts.map((p, i) => ' Q' + P(p) + ' ' + P(mid(p, pts[(i + 1) % pts.length]))).join('') + ' Z';
+      let d = 'M' + P(pts[0]);
+      for (let i = 1; i < pts.length - 1; i++) d += ' Q' + P(pts[i]) + ' ' + P(i < pts.length - 2 ? mid(pts[i], pts[i + 1]) : pts[i + 1]);
+      return d;
+    };
+    const dy = F.ventanas[0][0][1] - 1.0;                      // la camioneta lleva todo un poco más alto
+    const e1 = F.eje1, e2 = F.eje1 + F.ejes, R = F.rueda + 0.07, yb = F.piso - 0.02;
+    const dx = Math.sqrt(R * R - (F.rueda - yb) ** 2);
+    const r = (R * S).toFixed(1);
+    const cuerpo = suave(F.cuerpo) + ` L${P([e2 + dx, yb])} A${r} ${r} 0 1 0 ${P([e2 - dx, yb])} L${P([e1 + dx, yb])} A${r} ${r} 0 1 0 ${P([e1 - dx, yb])} L${P(F.cuerpo[0])} Z`;
+    const belt = F.ventanas[0][0][1] - 0.02, sill = F.piso + 0.08;
+    const juntas = F.puertas.map((s, i) => `M${X(s)} ${Yv(belt)} L${X(s)} ${Yv(i === F.puertas.length - 1 ? F.rueda + R + 0.04 : sill)}`).join(' ');
+    const fuente = FUENTE.replace(/'/g, '');
+    const rueda = s => { const cx = X(s), cy = Yv(F.rueda), r = F.rueda * S, ra = r * 0.62;
+      return `<g><circle cx="${cx}" cy="${cy}" r="${r.toFixed(1)}" fill="#1D1F1E"/><circle cx="${cx}" cy="${cy}" r="${ra.toFixed(1)}" fill="#C9CDCB" stroke="#6E736E" stroke-width="1.5"/><circle cx="${cx}" cy="${cy}" r="5" fill="#6E736E"/>${[0, 72, 144, 216, 288].map(a => `<path d="M${cx} ${cy} L${(cx + ra * 0.9 * Math.sin(a * Math.PI / 180)).toFixed(1)} ${(cy - ra * 0.9 * Math.cos(a * Math.PI / 180)).toFixed(1)}" stroke="#8E938E" stroke-width="3"/>`).join('')}</g>`; };
+    const L = F.largo, cy0 = Yv(techoEn(F, F.casquete) - 0.015);
+    return `<svg viewBox="0 0 440 182" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${titulo}">
 <defs>
 <linearGradient id="${id}c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#F4F4F0"/><stop offset="1" stop-color="#D5D7D2"/></linearGradient>
 <linearGradient id="${id}v" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3A4C56"/><stop offset="1" stop-color="#1A2329"/></linearGradient>
 </defs>
-<ellipse cx="220" cy="152" rx="190" ry="9" fill="#000" opacity=".16"/>
-<path d="M30 128 L26 102 Q28 88 44 84 L118 74 Q140 66 166 50 L196 34 Q206 30 220 30 L292 30 Q306 30 316 38 L352 66 Q392 70 410 80 Q418 86 416 100 L414 126 Q412 132 404 132 L374 132 A38 38 0 0 0 298 132 L150 132 A38 38 0 0 0 74 132 L38 132 Q31 132 30 128 Z" fill="url(#${id}c)" stroke="#6E736E" stroke-width="1.6"/>
-<path d="M176 52 L200 38 Q207 35 216 35 L246 35 L246 72 L150 74 Z" fill="url(#${id}v)"/>
-<path d="M254 35 L290 35 Q302 35 310 42 L338 68 L254 72 Z" fill="url(#${id}v)"/>
-<rect x="246" y="35" width="8" height="38" fill="#F2F2EE"/>
-<path d="M150 74 L338 68" stroke="#6E736E" stroke-width="1.2" fill="none"/>
-<path d="M150 78 L150 128 M250 76 L250 128 M346 72 L346 128" stroke="#9AA09A" stroke-width="1.4"/>
-<rect x="198" y="88" width="16" height="4" rx="2" fill="#9AA09A"/><rect x="298" y="86" width="16" height="4" rx="2" fill="#9AA09A"/>
-<g transform="translate(186 80) scale(.13)">${escudoG(id + 'e')}</g>
-${numero ? `<text x="199" y="121" font-family="Arial, sans-serif" font-weight="700" font-size="8.5" text-anchor="middle" fill="#111">N° ${numero}</text>` : ''}
-<text x="296" y="93" font-family="${FUENTE.replace(/'/g, '')}" font-weight="800" font-size="16" text-anchor="middle" fill="#111" letter-spacing=".6">${placa}</text>
-<rect x="254" y="101" width="46" height="5" fill="${BANDERA[0]}"/><rect x="254" y="106" width="46" height="5" fill="${BANDERA[1]}"/><rect x="254" y="111" width="46" height="5" fill="${BANDERA[2]}"/>
-<rect x="44" y="112" width="18" height="5" fill="#E8312F"/><rect x="384" y="110" width="18" height="5" fill="#E8312F"/>
-<path d="M28 96 L46 92 L50 100 L30 104 Z" fill="#EEF2F2" stroke="#7C817C"/>
-<path d="M404 84 L416 88 L416 100 L404 98 Z" fill="#C8102E"/>
-<path d="M118 74 L124 66 L132 66 L130 74 Z" fill="#E9EAE5" stroke="#7C817C"/>
-<g transform="translate(222 14)"><rect x="0" y="0" width="44" height="16" rx="2.5" fill="#FFFFFF" stroke="#C8102E" stroke-width="1.4"/><text x="22" y="12.5" font-family="${FUENTE.replace(/'/g, '')}" font-weight="800" font-size="12" text-anchor="middle" fill="#C8102E">TAXI</text><rect x="6" y="16" width="32" height="4" fill="#8E938E"/></g>
-${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><circle cx="${cx}" cy="132" r="19" fill="#C9CDCB" stroke="#6E736E" stroke-width="1.5"/><circle cx="${cx}" cy="132" r="5" fill="#6E736E"/>${[0, 72, 144, 216, 288].map(a => `<path d="M${cx} 132 L${(cx + 17 * Math.sin(a * Math.PI / 180)).toFixed(1)} ${(132 - 17 * Math.cos(a * Math.PI / 180)).toFixed(1)}" stroke="#8E938E" stroke-width="3"/>`).join('')}</g>`).join('')}
+<ellipse cx="220" cy="${G - 2}" rx="${(L * S / 2 - 8).toFixed(1)}" ry="8" fill="#000" opacity=".16"/>
+<path d="${suave(F.cabina, true)}" fill="#F7F7F3" stroke="#6E736E" stroke-width="1.6" stroke-linejoin="round"/>
+${F.ventanas.map(v => `<path d="M${v.map(P).join(' L')} Z" fill="url(#${id}v)" stroke="#1A2329" stroke-width="1.2" stroke-linejoin="round"/>`).join('')}
+<path d="${cuerpo}" fill="url(#${id}c)" stroke="#6E736E" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="${juntas}" stroke="#9AA09A" stroke-width="1.4"/>
+<rect x="${X(F.puertas[1] - 0.42)}" y="${Yv(0.9 + dy)}" width="16" height="4" rx="2" fill="#9AA09A"/><rect x="${X(F.puertas[2] - 0.38)}" y="${Yv(0.92 + dy)}" width="16" height="4" rx="2" fill="#9AA09A"/>
+<g transform="translate(${X(F.escudo) - 13} ${Yv(0.90 + dy)}) scale(.13)">${escudoG(id + 'e')}</g>
+${numero ? `<text x="${X(F.escudo)}" y="${Yv(0.455 + dy)}" font-family="Arial, sans-serif" font-weight="700" font-size="8.5" text-anchor="middle" fill="#111">N° ${numero}</text>` : ''}
+<text x="${X(F.codigo)}" y="${Yv(0.80 + dy)}" font-family="${fuente}" font-weight="800" font-size="16" text-anchor="middle" fill="#111" letter-spacing=".6">${placa}</text>
+${BANDERA.map((c, i) => `<rect x="${X(F.franjas) - 23}" y="${Yv(0.70 + dy) + i * 5}" width="46" height="5" fill="${c}"/>`).join('')}
+${F.reflectivas.map(r => `<rect x="${X(r) - 9}" y="${Yv(0.50 + dy)}" width="18" height="5" fill="#E8312F"/>`).join('')}
+<path d="M${P([0.02, 0.70 + dy])} L${P([0.22, 0.75 + dy])} L${P([0.26, 0.66 + dy])} L${P([0.04, 0.62 + dy])} Z" fill="#EEF2F2" stroke="#7C817C"/>
+<path d="M${P([L - 0.14, 0.92 + dy])} L${P([L - 0.01, 0.88 + dy])} L${P([L - 0.01, 0.75 + dy])} L${P([L - 0.14, 0.77 + dy])} Z" fill="#C8102E"/>
+<path d="M${P([F.espejo - 0.12, 0.99 + dy])} L${P([F.espejo - 0.06, 1.08 + dy])} L${P([F.espejo + 0.04, 1.08 + dy])} L${P([F.espejo + 0.02, 0.99 + dy])} Z" fill="#E9EAE5" stroke="#7C817C"/>
+${F.barras ? `<path d="M${X(F.parab[1][0] + 0.2)} ${cy0 - 3} L${X(F.luna[0][0] - 0.1)} ${cy0 - 3}" stroke="#3C403E" stroke-width="4" stroke-linecap="round"/>` : ''}
+<g transform="translate(${X(F.casquete) - 22} ${cy0 - 20})"><rect x="0" y="0" width="44" height="16" rx="2.5" fill="#FFFFFF" stroke="#C8102E" stroke-width="1.4"/><text x="22" y="12.5" font-family="${fuente}" font-weight="800" font-size="12" text-anchor="middle" fill="#C8102E">TAXI</text><rect x="6" y="16" width="32" height="4" fill="#8E938E"/></g>
+${rueda(e1)}${rueda(e2)}
 </svg>`;
   }
 
@@ -1260,7 +1394,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
   /* tamaño del carro en pantalla: un poco más grande que la realidad para que se vea bien en el celular */
   function largoEnPantalla(pxPorMetro, minimo = 30) { return Math.max(minimo, Math.min(124, pxPorMetro * MEDIDAS.largo * 2.2)); }
 
-  root.ChasquiTaxi = { dibujar, chapa, svgLado, svgEscudo, Flota, largoEnPantalla, MEDIDAS, BANDERA, ESTADOS };
+  root.ChasquiTaxi = { dibujar, chapa, svgLado, svgEscudo, Flota, largoEnPantalla, formaDe, techoEn, FORMAS, MEDIDAS, BANDERA, ESTADOS };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 /* Chasqui · mapa propio de Chachapoyas sobre <canvas> (OpenStreetMap, sin servidor de mapas).
@@ -1298,7 +1432,11 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
     mercado: ['#B07B22', 'canasta', 0.8], terminal: ['#2E6A4E', 'bus', 0.8], iglesia: ['#7A5A8C', 'iglesia', 1.1], policia: ['#2F4F7A', 'escudo', 1.6],
     municipio: ['#1F3B2D', 'columnas', 1.0], museo: ['#8C5A3C', 'columnas', 1.4], grifo: ['#6B6F6A', 'surtidor', 1.6], estadio: ['#3E7D45', 'ovalo', 0.9],
     bomberos: ['#C0392B', 'llama', 1.6], turismo: ['#A23B24', 'rombo', 0.9], teatro: ['#7A5A8C', 'estrella', 1.6], banco: ['#4F5B57', 'sol', 2.2],
+    // negocios (lugares.json de OpenStreetMap y los que agrega la gente): solo bien de cerca, para no tapar las calles
+    farmacia: ['#2E8B57', 'cruz', 2.6], restaurante: ['#C76B1E', 'cubiertos', 2.8], cafe: ['#8A5A2B', 'taza', 2.8],
+    hotel: ['#3F5FA0', 'cama', 2.6], tienda: ['#6E6A8C', 'bolsa', 3.2], bar: ['#8C3F6E', 'copa', 3.2],
   };
+  const ORDEN_ICONOS = Object.keys(ICONOS);   // si dos se pisan, gana el que está antes (hospital antes que tienda)
 
   function decodificar(txt, o) {   // Google Polyline (1e-5) relativa al origen o
     const pts = []; let i = 0, lat = Math.round(o[0] * 1e5), lon = Math.round(o[1] * 1e5);
@@ -1365,8 +1503,9 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
       for (const [tipo, nombre, la, lo] of b.lugares || []) {
         if (!ICONOS[tipo]) continue;
         if (lugares.some(l => C.haversine([l.lat ?? grafo.nodes[l.nodo][0], l.lon ?? grafo.nodes[l.nodo][1]], [la, lo]) < 110)) continue;
-        c.lugares.push({ tipo, nombre: nombre.length > 34 ? nombre.slice(0, 32) + '…' : nombre, lat: la, lon: lo });
+        c.lugares.push({ tipo, nombre: nombre.length > 34 ? nombre.slice(0, 32) + '…' : nombre, clave: nombre.toLowerCase(), lat: la, lon: lo });
       }
+      c.lugares.push(...pendientes.splice(0));
       // la Plaza de Armas: el polígono de plaza más cercano a la plaza de la app
       const pl = lugares[0], pla = pl.lat ?? grafo.nodes[pl.nodo][0], plo = pl.lon ?? grafo.nodes[pl.nodo][1];
       let mejor = null, mejorD = 140;
@@ -1382,7 +1521,23 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
         const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
         c.plazaArmas = { p, x0, x1, y0, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
       }
+      c.lugares.sort((a, b) => ORDEN_ICONOS.indexOf(a.tipo) - ORDEN_ICONOS.indexOf(b.tipo));
       capas = c; sucio = true;
+    }
+    /* más lugares con ícono: todos los negocios de OpenStreetMap (lugares.json) y los que agrega la gente.
+       lista: [[tipo, nombre, lat, lon], …] o [{ tipo, nombre, lat, lon }, …]. Sirve antes o después de ponerBase. */
+    const pendientes = [];
+    function ponerLugares(lista) {
+      const destino = capas ? capas.lugares : pendientes;
+      for (const x of lista || []) {
+        const [tipo, nombre, la, lo] = Array.isArray(x) ? x : [x.tipo, x.nombre, x.lat, x.lon];
+        if (!nombre || la == null) continue;
+        const t = ICONOS[tipo] ? tipo : 'tienda', clave = String(nombre).toLowerCase();
+        if (destino.some(l => l.clave === clave && Math.abs(l.lat - la) < 0.0008 && Math.abs(l.lon - lo) < 0.0008)) continue;
+        if (lugares.some(l => l.nombre && l.nombre.toLowerCase() === clave)) continue;   // la app ya lo marca
+        destino.push({ tipo: t, nombre: nombre.length > 34 ? nombre.slice(0, 32) + '…' : nombre, clave, lat: la, lon: lo });
+      }
+      if (capas) { capas.lugares.sort((a, b) => ORDEN_ICONOS.indexOf(a.tipo) - ORDEN_ICONOS.indexOf(b.tipo)); sucio = true; }
     }
     /* jardines, caminos de piedra, árboles y la pileta de la Plaza de Armas */
     function plazaDeArmas(ppm, enMetros) {
@@ -1556,12 +1711,51 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
       ctx.beginPath(); ctx.arc(x, y, 3.5 * dpr, 0, Math.PI * 2); ctx.fillStyle = col.textoFuerte; ctx.fill();
     }
     /* el taxi blanco de Chachapoyas (core/chasqui-taxi.js) al tamaño que toca para el zoom */
+    // fuera de la pantalla no se dibuja nada (con 1000 taxis, la mayoría está fuera cuando te acercas)
+    const fuera = (x, y, m) => x < -m || y < -m || x > canvas.width + m || y > canvas.height + m;
     function carro(x, y, rumbo, op = {}) {
       const T = root.ChasquiTaxi; if (!T) return;
-      T.dibujar(ctx, x, y, rumbo, { ...op, largo: T.largoEnPantalla(pxPorMetro(), op.minimo || 30) * dpr, dpr, noche });
+      const L = T.largoEnPantalla(pxPorMetro(), op.minimo || 30) * dpr;
+      if (fuera(x, y, L * (noche ? 1.8 : 0.8))) return;
+      T.dibujar(ctx, x, y, rumbo, { ...op, largo: L, dpr, noche });
+    }
+    /* Muchos puntos juntos (la central con toda la flota): se agrupan en celdas de `celda` px.
+     * Devuelve { solos: [items], grupos: [{ x, y, items }] }; cada item trae x, y en píxeles. */
+    function grupos(items, celda = 64, minimo = 3) {
+      const c = celda * dpr, m = new Map();
+      for (const it of items) {
+        if (fuera(it.x, it.y, c)) continue;
+        const k = Math.floor(it.x / c) + ',' + Math.floor(it.y / c);
+        let g = m.get(k); if (!g) m.set(k, g = []); g.push(it);
+      }
+      const solos = [], gs = [];
+      for (const g of m.values()) {
+        if (g.length < minimo) { solos.push(...g); continue; }
+        gs.push({ x: g.reduce((s, i) => s + i.x, 0) / g.length, y: g.reduce((s, i) => s + i.y, 0) / g.length, items: g });
+      }
+      return { solos, grupos: gs };
+    }
+    /* burbuja con el número de taxis y un anillo partido por estado: partes = [[cantidad, color], …] */
+    function burbuja(x, y, n, partes) {
+      const r = (13 + Math.min(16, Math.sqrt(n) * 2.2)) * dpr;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 6 * dpr; ctx.shadowOffsetY = 2 * dpr;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = '#FFFFFF'; ctx.fill();
+      ctx.shadowColor = 'transparent';
+      let a = -Math.PI / 2; const total = partes.reduce((s, p) => s + p[0], 0) || 1;
+      ctx.lineWidth = 4 * dpr;
+      for (const [k, color] of partes) {
+        if (!k) continue;
+        const b = a + k / total * Math.PI * 2;
+        ctx.beginPath(); ctx.arc(x, y, r - 2 * dpr, a, b); ctx.strokeStyle = color; ctx.stroke(); a = b;
+      }
+      ctx.fillStyle = '#111'; ctx.font = `800 ${(n > 99 ? 13 : 15) * dpr}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(n), x, y + 1 * dpr);
+      ctx.restore();
     }
     function chapa(x, y, placa, op = {}) {
       const T = root.ChasquiTaxi; if (!T || !placa) return;
+      if (fuera(x, y, 120 * dpr)) return;
       const L = T.largoEnPantalla(pxPorMetro(), op.minimo || 30);
       return T.chapa(ctx, x, y, placa, { ...op, dpr, alto: L * 0.5 + 4 });
     }
@@ -1621,6 +1815,16 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
         case 'rombo': ctx.moveTo(x, y - 5 * u); ctx.lineTo(x + 4 * u, y); ctx.lineTo(x, y + 5 * u); ctx.lineTo(x - 4 * u, y); ctx.closePath(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y - 2 * u); ctx.lineTo(x + 1.6 * u, y); ctx.lineTo(x, y + 2 * u); ctx.lineTo(x - 1.6 * u, y); ctx.closePath(); ctx.fill(); return;
         case 'estrella': for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = (i % 2 ? 2 : 4.8) * u; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); return;
         case 'sol': ctx.font = `800 ${7.5 * u}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('S/', x, y + 0.5 * u); return;
+        case 'cubiertos': ctx.moveTo(x - 2.5 * u, y - 4.5 * u); ctx.lineTo(x - 2.5 * u, y + 4.5 * u); ctx.moveTo(x - 4 * u, y - 4.5 * u); ctx.lineTo(x - 4 * u, y - 1 * u); ctx.lineTo(x - 1 * u, y - 1 * u); ctx.lineTo(x - 1 * u, y - 4.5 * u);
+          ctx.moveTo(x + 2.8 * u, y + 4.5 * u); ctx.lineTo(x + 2.8 * u, y - 4.5 * u); ctx.quadraticCurveTo(x + 5 * u, y - 2 * u, x + 2.8 * u, y + 0.5 * u); ctx.stroke(); return;
+        case 'taza': ctx.moveTo(x - 4 * u, y - 2 * u); ctx.lineTo(x + 2.5 * u, y - 2 * u); ctx.lineTo(x + 1.8 * u, y + 3.5 * u); ctx.lineTo(x - 3.3 * u, y + 3.5 * u); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.arc(x + 3 * u, y + 0.3 * u, 1.6 * u, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x - 2 * u, y - 3.5 * u); ctx.lineTo(x - 1.5 * u, y - 5.5 * u); ctx.moveTo(x + 0.5 * u, y - 3.5 * u); ctx.lineTo(x + 1 * u, y - 5.5 * u); ctx.stroke(); return;
+        case 'cama': ctx.fillRect(x - 5 * u, y - 0.5 * u, 10 * u, 3 * u); ctx.fillRect(x - 5 * u, y - 4 * u, 1.5 * u, 8 * u); ctx.fillRect(x + 3.5 * u, y + 2 * u, 1.5 * u, 2 * u);
+          ctx.arc(x - 1.8 * u, y - 2 * u, 1.5 * u, 0, Math.PI * 2); ctx.fill(); return;
+        case 'bolsa': ctx.fillRect(x - 4 * u, y - 1.5 * u, 8 * u, 6 * u); ctx.arc(x, y - 1.5 * u, 2.2 * u, Math.PI, 0); ctx.stroke(); return;
+        case 'copa': ctx.moveTo(x - 4 * u, y - 4.5 * u); ctx.lineTo(x + 4 * u, y - 4.5 * u); ctx.lineTo(x, y + 0.5 * u); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(x, y + 0.5 * u); ctx.lineTo(x, y + 4 * u); ctx.moveTo(x - 2.5 * u, y + 4.3 * u); ctx.lineTo(x + 2.5 * u, y + 4.3 * u); ctx.stroke(); return;
       }
     }
     function iconosLugares(cajas, ppm) {
@@ -1712,7 +1916,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
 
     /* ---- dibujo del mapa ---- */
     const h = { ctx, get dpr() { return dpr; }, get col() { return col; }, get noche() { return noche; }, t: 0,
-      xy, trazo, ruta, rombo, pin, bandera, carro, chapa, rotulo, auto, calle, pxPorMetro };
+      xy, trazo, ruta, rombo, pin, bandera, carro, chapa, grupos, burbuja, rotulo, auto, calle, pxPorMetro };
     function dibujar() {
       if (!W) return;
       const ppm = pxPorMetro();
@@ -1857,7 +2061,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
     if (base) ponerBase(base);
     requestAnimationFrame(bucle);
 
-    return { vista, encuadrar, ciudad, centrar, zoom, volar, desde, pxPorMetro, medir, leerColores, ponerBase,
+    return { vista, encuadrar, ciudad, centrar, zoom, volar, desde, pxPorMetro, medir, leerColores, ponerBase, ponerLugares,
       get noche() { return noche; },
       redibujar() { sucio = true; }, dibujarYa() { sucio = false; dibujar(); } };
   }
@@ -1866,8 +2070,16 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
   function cargarBase(url = 'base.json') {
     return fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
   }
+  // todos los negocios con nombre (tools/osm_lugares.py → lugares.json) y los aprobados que agregó la gente
+  function cargarLugares(mapa, sb, hay = true) {
+    const listas = [];
+    if (hay) listas.push(fetch('lugares.json').then(r => r.ok ? r.json() : []).catch(() => []));
+    if (sb) listas.push(sb.from('lugares_extra').select('nombre,tipo,lat,lon').eq('aprobado', true).limit(5000)
+      .then(({ data }) => data || [], () => []));
+    return Promise.all(listas).then(ls => { const todo = ls.flat(); if (mapa) mapa.ponerLugares(todo); return todo; });
+  }
 
-  root.ChasquiMapa = { crear, cargarBase, decodificar, PALETA };
+  root.ChasquiMapa = { crear, cargarBase, cargarLugares, decodificar, PALETA };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -2176,7 +2388,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
 
   for (let k = 0; k < 22; k++) {
     const n = azar(nodosCiudad);
-    sim.taxis.push({ id: k + 1, nombre: NOMBRES[k], placa: 'CHQ-' + String(k + 1).padStart(3, '0'),
+    sim.taxis.push({ id: k + 1, nombre: NOMBRES[k], placa: 'CHQ-' + String(k + 1).padStart(3, '0'), forma: ['sedan', 'sedan', 'station', 'sedan', 'hatch', 'sedan_grande', 'sedan', 'station', 'camioneta', 'sedan'][k % 10],
       estado: 'libre', ruta: null, i: 0, prog: 0, acum: [0], largo: 0, pos: grafo.nodes[n].slice(), nodo: n,
       destinoNodo: null, pedido: null, siguiente: null, ofertaPendiente: null, objetivo: null });
   }
@@ -2404,7 +2616,7 @@ ${[112, 336].map(cx => `<g><circle cx="${cx}" cy="132" r="31" fill="#1D1F1E"/><c
       let d = t.rumboObj - t.rumbo; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
       t.rumbo += d * (1 - Math.exp(-dt / 0.15));
       const estado = t.siguiente ? 'encadenado' : t.estado === 'libre' ? 'libre' : t.estado === 'recogiendo' ? 'recogiendo' : 'viaje';
-      ChasquiTaxi.dibujar(ctx, x, y, t.rumbo, { largo: (esMio ? 36 : 23) * dpr, estado, placa: t.placa, dpr, noche, resaltar: esMio, pulso: (ahora / 1600) % 1 });
+      ChasquiTaxi.dibujar(ctx, x, y, t.rumbo, { largo: (esMio ? 36 : 23) * dpr, forma: t.forma, estado, placa: t.placa, dpr, noche, resaltar: esMio, pulso: (ahora / 1600) % 1 });
       if (esMio) chapaMia = [x, y, t.placa];
     }
     if (chapaMia) ChasquiTaxi.chapa(ctx, chapaMia[0], chapaMia[1], chapaMia[2], { dpr, alto: 22 });
