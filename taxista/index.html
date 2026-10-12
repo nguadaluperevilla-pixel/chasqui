@@ -79,6 +79,8 @@ label.campo{display:block;font-size:14px;color:var(--muted)}
 .atribucion{position:absolute;right:8px;bottom:28px;font-size:11px;color:var(--muted);z-index:1;pointer-events:none}
 .caja-chip{position:absolute;left:12px;top:66px;z-index:2;background:color-mix(in srgb,var(--surface) 88%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:6px 10px;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
 .caja-chip b{font-family:var(--font-display);font-size:18px}
+.auto-btn{position:absolute;left:12px;top:62px;z-index:2;border:0;background:var(--bosque);color:var(--bosque-ink,#fff);font:inherit;font-weight:700;font-size:14px;border-radius:12px;padding:9px 12px;box-shadow:0 2px 10px rgba(0,0,0,.18);cursor:pointer}
+.auto-btn[aria-pressed="true"]{background:var(--ocre);color:#fff}
 .prueba-chip{position:absolute;left:12px;right:70px;top:18px;z-index:2;margin:0;background:var(--arcilla);color:#1B2620;font-weight:700;font-size:14px;border-radius:12px;padding:8px 12px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.15)}
 
 .hoja{flex:none;position:relative;z-index:3;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:var(--sombra);margin-top:-22px;padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 16px);max-height:64vh;overflow-y:auto}
@@ -357,6 +359,7 @@ dialog.hojita .hojita-cuerpo{padding-top:18px}
     <canvas id="mapa" role="img" aria-label="Mapa de Chachapoyas con tu posición, tu carrera y las zonas con más pedidos."></canvas>
     <p class="caja-chip" id="cajaChip" hidden></p>
     <p class="prueba-chip" id="pruebaChip" hidden>Modo prueba · toca el mapa para mover tu taxi</p>
+    <button type="button" class="auto-btn" id="btnAuto" hidden aria-pressed="false">Manejar solo ▸</button>
     <div class="controles">
       <button id="btnGps" aria-label="Ir a mi ubicación"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.2" fill="var(--accent)" stroke="none"/><path d="M12 1.5v3.5M12 19v3.5M1.5 12H5M19 12h3.5"/></svg></button>
       <button id="btnMas" aria-label="Acercar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -2241,7 +2244,8 @@ ${rueda(e1)}${rueda(e2)}
   /* Modo prueba: si estás lejos de Chachapoyas (o sin GPS), tocas el mapa para decir dónde está tu taxi. */
   function modoPrueba(si, motivo) {
     st.modoPrueba = si;
-    $('pruebaChip').hidden = !si;
+    $('pruebaChip').hidden = !si; $('btnAuto').hidden = !si;
+    if (!si) try { AUTO.vel = 0; pintarAuto(); } catch {}   // (AUTO se declara más abajo)
     $('mPrueba').textContent = si ? 'Salir del modo prueba (usar mi GPS)' : 'Modo prueba (estoy fuera de Chachapoyas)';
     if (si && motivo) aviso(motivo, 5000);
     if (!si && st.fuentePos === 'prueba') { st.fuentePos = null; st.pos = null; }
@@ -2694,6 +2698,65 @@ ${rueda(e1)}${rueda(e2)}
     }
   }
   $('btnSeguir').addEventListener('click', () => { st.ultimoTerminado = null; pintar(); });
+
+  /* ---------- Manejar solo (simulación, solo en modo prueba) ----------
+     Para que una sola persona pruebe todo: pide un taxi desde la app del pasajero y este taxi de prueba
+     acepta, va por las calles a recogerte, te recoge, te lleva y cobra. Lo ves moverse en la app del
+     pasajero y en la central. Velocidad: normal ≈ 30 km/h, rápido ≈ 90 km/h (para no esperar). */
+  const AUTO = { vel: 0, clave: '', ruta: null, recorrido: 0, llego: 0, oferta: null, vioOferta: 0, cobro: 0, ult: 0, envio: 0 };
+  const VELOCIDADES = [[0, 'Manejar solo'], [8.3, 'Manejando solo · normal'], [25, 'Manejando solo · rápido']];
+  function pintarAuto() {
+    const v = VELOCIDADES.find(x => x[0] === AUTO.vel);
+    $('btnAuto').textContent = v[1] + (AUTO.vel ? ' (toca para cambiar)' : ' ▸');
+    $('btnAuto').setAttribute('aria-pressed', String(AUTO.vel > 0));
+  }
+  $('btnAuto').addEventListener('click', async () => {
+    const i = VELOCIDADES.findIndex(x => x[0] === AUTO.vel);
+    AUTO.vel = VELOCIDADES[(i + 1) % VELOCIDADES.length][0];
+    pintarAuto();
+    if (!AUTO.vel) { aviso('Ya no maneja solo: mueve tu taxi tocando el mapa'); return; }
+    if (!st.pos) nuevaPos(grafo.nodes[LUGARES[0].nodo], 'prueba');   // empieza en la Plaza de Armas
+    if (!st.conectado) await conectar(true);
+    aviso('Listo: pide un taxi desde la app del pasajero y míralo venir', 5000);
+  });
+  function puntoEn(ruta, s) {   // el punto a s metros del inicio de la ruta
+    for (let i = 1; i < ruta.length; i++) {
+      const d = C.haversine(ruta[i - 1], ruta[i]);
+      if (s <= d) { const k = d ? s / d : 1; return [ruta[i - 1][0] + (ruta[i][0] - ruta[i - 1][0]) * k, ruta[i - 1][1] + (ruta[i][1] - ruta[i - 1][1]) * k]; }
+      s -= d;
+    }
+    return ruta[ruta.length - 1];
+  }
+  setInterval(async () => {
+    if (!AUTO.vel || !st.modoPrueba || !st.taxista) return;
+    const ahora = Date.now(), dt = Math.min(2, (ahora - (AUTO.ult || ahora)) / 1000); AUTO.ult = ahora;
+    // 1. una oferta: la acepta a los 2 segundos (como quien la lee)
+    if (st.oferta) {
+      if (AUTO.oferta !== st.oferta.id) { AUTO.oferta = st.oferta.id; AUTO.vioOferta = ahora; }
+      else if (ahora - AUTO.vioOferta > 2000) responder(true);
+      return;
+    }
+    // 2. pantalla de cobrar: a los 4 segundos sigue trabajando
+    if (st.ultimoTerminado) { if (!AUTO.cobro) AUTO.cobro = ahora; else if (ahora - AUTO.cobro > 4000) { AUTO.cobro = 0; $('btnSeguir').click(); } return; }
+    const a = actual(); if (!a || !st.pos) return;
+    // 3. una ruta nueva cada vez que cambia la carrera o su etapa (ir a recoger / llevar al destino)
+    const clave = a.id + a.estado;
+    if (AUTO.clave !== clave) {
+      const nT = grafo.cercano(st.pos[0], st.pos[1]);
+      const meta = a.estado === 'abordo' ? grafo.cercano(a.destino_lat, a.destino_lon) : grafo.cercano(a.origen_lat, a.origen_lon);
+      const r = grafo.rutaHacia(grafo.dijkstra(meta), nT);
+      AUTO.clave = clave; AUTO.recorrido = 0; AUTO.llego = 0;
+      AUTO.ruta = r ? [st.pos, ...r.map(n => grafo.nodes[n])] : [st.pos, grafo.nodes[meta]];
+      AUTO.largo = AUTO.ruta.slice(1).reduce((s, p, i) => s + C.haversine(AUTO.ruta[i], p), 0);
+    }
+    // 4. avanzar por las calles; al llegar espera 3 s y toca «Ya lo recogí» o «Terminar viaje y cobrar»
+    if (AUTO.recorrido < AUTO.largo) {
+      AUTO.recorrido = Math.min(AUTO.largo, AUTO.recorrido + AUTO.vel * dt);
+      nuevaPos(puntoEn(AUTO.ruta, AUTO.recorrido), 'prueba');
+      if (ahora - AUTO.envio > 2500) { AUTO.envio = ahora; enviarUbicacion(); }   // que el pasajero y la central lo vean moverse
+    } else if (!AUTO.llego) { AUTO.llego = ahora; enviarUbicacion(); }
+    else if (ahora - AUTO.llego > 3000 && !$('btnAccion').disabled) { AUTO.llego = ahora + 60000; $('btnAccion').click(); }
+  }, 500);
 
   /* ---------- botón de ayuda (mantener 2 s) ---------- */
   async function mandarPanico(lat, lon) {
