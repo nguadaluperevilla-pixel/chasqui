@@ -272,6 +272,15 @@ dialog.hojita .hojita-cuerpo{padding-top:18px}
     <p>Para taxistas autorizados de Chachapoyas</p>
   </header>
   <div class="entrada-cuerpo">
+    <!-- la cuenta de la central (dueño o administrador) no es de taxista: no mandarla al registro -->
+    <div id="esCentral" hidden>
+      <p style="font-size:18px;margin:0 0 6px"><b>Hola<span id="ecNombre"></span>. Esta es una cuenta de la central.</b></p>
+      <p class="nota" style="margin:0 0 14px">Para ver los taxis en vivo, aprobar taxistas, dar Plus y revisar todo, entra a Chasqui Central con este mismo correo y clave.</p>
+      <a class="primario" href="../central/" style="display:flex;justify-content:center;text-decoration:none">Ir a Chasqui Central</a>
+      <p class="nota" style="margin:16px 0 6px">¿También manejas un taxi Chasqui? Registra tu taxi con esta misma cuenta.</p>
+      <button type="button" class="boton-plus" id="ecManejo">Registrar mi taxi</button>
+      <button type="button" class="boton-plus" id="ecSalir" style="margin-left:6px">Entrar con otra cuenta</button>
+    </div>
     <div class="pestanas" role="tablist">
       <button role="tab" id="tabEntrar" aria-selected="true">Ya tengo cuenta</button>
       <button role="tab" id="tabUnirme" aria-selected="false">Quiero ser chasqui</button>
@@ -2281,7 +2290,19 @@ ${rueda(e1)}${rueda(e2)}
     $('tabEntrar').setAttribute('aria-selected', String(cual === 'entrar'));
     $('tabUnirme').setAttribute('aria-selected', String(cual === 'unirme'));
     $('fEntrar').hidden = cual !== 'entrar'; $('fUnirme').hidden = cual !== 'unirme';
+    $('esCentral').hidden = true;
   }
+  function mostrarEsCentral() {
+    $('esCentral').hidden = false; $('fEntrar').hidden = true; $('fUnirme').hidden = true;
+    document.querySelector('.pestanas').hidden = true;
+    $('ecNombre').textContent = st.perfil && st.perfil.nombre ? ', ' + st.perfil.nombre.split(' ')[0] : '';
+  }
+  $('ecManejo').addEventListener('click', () => { document.querySelector('.pestanas').hidden = false; pestana('unirme'); });
+  $('ecSalir').addEventListener('click', async () => {
+    await sb.auth.signOut(); st.yo = null; st.taxista = null; st.perfil = null;
+    $('uCorreo').disabled = false; $('uClave').disabled = false; $('uClave').required = true; $('uError').textContent = '';
+    document.querySelector('.pestanas').hidden = false; pestana('entrar');
+  });
   $('tabEntrar').addEventListener('click', () => pestana('entrar'));
   $('tabUnirme').addEventListener('click', () => pestana('unirme'));
   function errorAuth(e) {
@@ -2904,6 +2925,7 @@ ${rueda(e1)}${rueda(e2)}
       $('entrada').hidden = false; pestana('unirme');
       $('uError').textContent = 'Completa tus datos de taxista para enviar la solicitud.';
       $('uCorreo').value = data.session.user.email || ''; $('uCorreo').disabled = true; $('uClave').disabled = true; $('uClave').required = false;
+      if (st.perfil && st.perfil.rol === 'admin') { $('uError').textContent = ''; mostrarEsCentral(); }   // la cuenta de la central
       return;
     }
     $('entrada').hidden = true;
@@ -2938,7 +2960,7 @@ ${rueda(e1)}${rueda(e2)}
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
   // Para pruebas sin salir a la calle: __app.gpsFalso(lat, lon) mueve el taxi en el mapa.
-  globalThis.__app = { st, mapa, grafo, sb, revisar, conectar, pintarSugerencia, abrirPlus, gpsFalso: (la, lo) => nuevaPos([la, lo], 'prueba') };
+  globalThis.__app = { st, mapa, grafo, sb, revisar, conectar, pintarSugerencia, abrirPlus, mostrarEsCentral, gpsFalso: (la, lo) => nuevaPos([la, lo], 'prueba') };
   arrancar();
 })();
 </script>
