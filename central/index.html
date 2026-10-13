@@ -2012,38 +2012,69 @@ ${rueda(e1)}${rueda(e2)}
     st.pestana = p;
     document.querySelectorAll('nav.pestanas button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.p === p)));
     document.querySelectorAll('[data-panel]').forEach(s => { s.hidden = s.dataset.panel !== p; });
-    if (p === 'vivo' && mapa) { mapa.medir(); mapa.redibujar(); }
+    if (p === 'vivo' && mapa) { mapa.medir(); mapa.redibujar(); cargarUbic(true); }   // al volver a «En vivo», todo al día
   }
   document.querySelectorAll('nav.pestanas button').forEach(b => b.addEventListener('click', () => pestana(b.dataset.p)));
   $('verAlerta').addEventListener('click', () => pestana('alertas'));
 
   /* ---------- cargar datos ---------- */
-  // dónde está cada taxi: cada 4 s (solo esto, que es liviano), para que se vean avanzar por las calles y no a saltos
-  function ponerUbic(data) {
-    const ahora = Date.now();
-    st.ubic = (data || []).filter(u => ahora - new Date(u.actualizado) < 120000);
-    for (const u of st.ubic) flota.poner(u.taxista_id, u.lat, u.lon, performance.now(), u.rumbo == null ? null : u.rumbo * Math.PI / 180);
-    flota.quedarse(st.ubic.map(u => u.taxista_id));
-  }
-  // aviso en tiempo real: un taxi mandó su ubicación (llega al instante, no hay que esperar la siguiente consulta)
-  function alCambiarUbic(cambio) {
-    const u = cambio.new; if (!u || !u.taxista_id) return;
+  /* ---------- dónde está cada taxi ----------
+     Pocos taxis conectados (hasta ~150, como en el piloto): cada posición llega AL INSTANTE por tiempo real.
+     Muchos (la ciudad entera, ~1000): el tiempo real se apaga solo, porque serían cientos de avisos por segundo,
+     y se pregunta lo justo:
+       - viendo la ciudad de lejos (burbujas con números): solo los taxis que cambiaron, cada 12 s;
+       - de cerca (se ven los carros): todos los de la zona que está en pantalla, cada 4 s.
+     Cada minuto, una carga completa para no perder a nadie. */
+  const MUCHOS = 150, COLS = 'taxista_id,lat,lon,rumbo,estado,forma,actualizado,restante_s,destino_lat,destino_lon';
+  let canalUbic = null, ultimaUbic = null, ultimaCompleta = 0, ultimaConsulta = 0;
+  function ponerFila(u) {
     const i = st.ubic.findIndex(x => x.taxista_id === u.taxista_id);
-    if (u.estado === 'fuera') { if (i >= 0) st.ubic.splice(i, 1); flota.quitar(u.taxista_id); }
-    else {
-      const t = st.taxistas.find(x => x.id === u.taxista_id);
-      const fila = { ...u, taxistas: i >= 0 ? st.ubic[i].taxistas : t ? { placa: t.placa, numero_registro: t.numero_registro, perfiles: t.perfiles } : null };
-      if (i >= 0) st.ubic[i] = fila; else st.ubic.push(fila);
-      flota.poner(u.taxista_id, u.lat, u.lon, performance.now(), u.rumbo == null ? null : u.rumbo * Math.PI / 180);
-    }
+    if (u.estado === 'fuera') { if (i >= 0) st.ubic.splice(i, 1); flota.quitar(u.taxista_id); return; }
+    const t = st.taxistas.find(x => x.id === u.taxista_id);
+    const fila = { ...u, taxistas: t ? { placa: t.placa, numero_registro: t.numero_registro, perfiles: t.perfiles } : i >= 0 ? st.ubic[i].taxistas : null };
+    if (i >= 0) st.ubic[i] = fila; else st.ubic.push(fila);
+    flota.poner(u.taxista_id, u.lat, u.lon, performance.now(), u.rumbo == null ? null : u.rumbo * Math.PI / 180);
+    if (!ultimaUbic || u.actualizado > ultimaUbic) ultimaUbic = u.actualizado;
+  }
+  function tiempoReal() {   // con un margen para no prender y apagar a cada rato
+    const si = st.ubic.length <= (canalUbic ? MUCHOS : MUCHOS * 0.8);
+    if (si && !canalUbic) canalUbic = sb.channel('central-ubic').on('postgres_changes', { event: '*', schema: 'public', table: 'ubicaciones' }, alCambiarUbic).subscribe();
+    if (!si && canalUbic) { sb.removeChannel(canalUbic); canalUbic = null; }
+    $('cConectados').title = canalUbic ? 'Posiciones al instante (tiempo real)' : 'Muchos taxis: posiciones por zonas, cada 4 a 12 s';
+  }
+  function alCambiarUbic(cambio) {   // aviso en tiempo real: un taxi mandó su ubicación
+    if (!cambio.new || !cambio.new.taxista_id) return;
+    ponerFila(cambio.new);
     $('cConectados').textContent = st.ubic.length;
     if (mapa) mapa.redibujar();
   }
-  async function cargarUbic() {
+  async function cargarUbic(completa = false) {
     if (document.hidden || st.pestana !== 'vivo') return;
-    const { data, error } = await sb.from('ubicaciones').select('*, taxistas(placa, numero_registro, perfiles(nombre))').neq('estado', 'fuera');
+    const ahora = Date.now(), muchos = !canalUbic, cerca = mapa && mapa.pxPorMetro() >= 3.2;
+    completa = completa || !ultimaUbic || ahora - ultimaCompleta > 60000;
+    if (!completa && !muchos && ahora - ultimaConsulta < 10000) return;            // con tiempo real basta un repaso cada 10 s
+    if (!completa && muchos && !cerca && ahora - ultimaConsulta < 12000) return;   // ciudad de lejos: cada 12 s
+    ultimaConsulta = ahora;
+    let q = sb.from('ubicaciones').select(COLS);
+    if (completa) { q = q.neq('estado', 'fuera'); ultimaCompleta = ahora; }
+    else if (muchos && cerca) {   // solo la zona que se ve (un poco más grande)
+      const cv = $('mapa'), [n, w] = mapa.desde(-80, -80), [s, e] = mapa.desde(cv.clientWidth + 80, cv.clientHeight + 80);
+      q = q.gte('lat', s).lte('lat', n).gte('lon', w).lte('lon', e);
+    } else q = q.gt('actualizado', ultimaUbic);   // solo lo que cambió (también los que se desconectaron)
+    const { data, error } = await q;
     if (error) return;
-    ponerUbic(data); $('cConectados').textContent = st.ubic.length;
+    if (completa) {
+      const ids = new Set((data || []).map(u => u.taxista_id));
+      for (const u of st.ubic) if (!ids.has(u.taxista_id)) flota.quitar(u.taxista_id);
+      st.ubic = st.ubic.filter(u => ids.has(u.taxista_id));
+    }
+    for (const u of data || []) ponerFila(u);
+    // los que no reportan hace 2 minutos ya no están
+    const viejo = Date.now() - 120000;
+    for (const u of st.ubic) if (new Date(u.actualizado) < viejo) flota.quitar(u.taxista_id);
+    st.ubic = st.ubic.filter(u => new Date(u.actualizado) >= viejo);
+    tiempoReal();
+    $('cConectados').textContent = st.ubic.length;
     if (mapa) mapa.redibujar();
   }
   // con 1000 taxis cambian viajes varias veces por segundo: los avisos se juntan y se recarga una vez cada 3 s
@@ -2053,7 +2084,7 @@ ${rueda(e1)}${rueda(e2)}
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const [tx, ub, vj, pg, rs, al, ds, tf, ad] = await Promise.all([
       sb.from('taxistas').select('*, perfiles(nombre, telefono, rol)').order('creado', { ascending: false }),
-      sb.from('ubicaciones').select('*, taxistas(placa, numero_registro, perfiles(nombre))').neq('estado', 'fuera'),
+      Promise.resolve(null),   // las ubicaciones van aparte (cargarUbic), que con 1000 taxis pesan
       sb.from('viajes').select('*').gte('creado', hoy.toISOString()).order('creado', { ascending: false }),
       sb.from('pagos_membresia').select('*, taxistas(placa, perfiles(nombre))').order('creado', { ascending: false }).limit(60),
       sb.from('reservas').select('*, destinos_largos(nombre, provincia), perfiles(nombre)').in('estado', ['pendiente', 'confirmada']).order('fecha_hora'),
@@ -2062,8 +2093,7 @@ ${rueda(e1)}${rueda(e2)}
       sb.from('tarifas').select('*').eq('activa', true).limit(1),
       sb.from('perfiles').select('id, nombre, telefono').eq('rol', 'admin'),
     ]);
-    st.taxistas = tx.data || [];
-    ponerUbic(ub.data);
+    st.taxistas = tx.data || []; void ub;
     st.viajes = vj.data || []; st.alertas = al.data || [];
     pintarVivo(); pintarTaxistas(); pintarPagos(pg.data || []); pintarReservas(rs.data || []); pintarAlertas(); pintarPrecios(ds.data || [], (tf.data || [])[0]); pintarEquipo(ad.data || []);
     if (mapa) mapa.redibujar();
@@ -2392,10 +2422,10 @@ ${rueda(e1)}${rueda(e2)}
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos_membresia' }, pedirCarga)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas' }, pedirCarga)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, pedirCarga)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ubicaciones' }, alCambiarUbic)   // cada taxi, al instante
       .subscribe();
+    await cargarUbic(true);   // y prende el tiempo real de posiciones si son pocos taxis
     setInterval(cargarTodo, 15000);   // todo lo demás, por si se corta el tiempo real
-    setInterval(cargarUbic, 10000);   // y las posiciones, por si se pierde algún aviso
+    setInterval(cargarUbic, 4000);    // decide sola si pregunta o no (ver cargarUbic)
     document.addEventListener('visibilitychange', () => { if (!document.hidden) cargarUbic(); });
   }
   document.addEventListener('pointerdown', () => { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch {} }, { once: true });
