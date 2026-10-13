@@ -2025,6 +2025,20 @@ ${rueda(e1)}${rueda(e2)}
     for (const u of st.ubic) flota.poner(u.taxista_id, u.lat, u.lon, performance.now(), u.rumbo == null ? null : u.rumbo * Math.PI / 180);
     flota.quedarse(st.ubic.map(u => u.taxista_id));
   }
+  // aviso en tiempo real: un taxi mandó su ubicación (llega al instante, no hay que esperar la siguiente consulta)
+  function alCambiarUbic(cambio) {
+    const u = cambio.new; if (!u || !u.taxista_id) return;
+    const i = st.ubic.findIndex(x => x.taxista_id === u.taxista_id);
+    if (u.estado === 'fuera') { if (i >= 0) st.ubic.splice(i, 1); flota.quitar(u.taxista_id); }
+    else {
+      const t = st.taxistas.find(x => x.id === u.taxista_id);
+      const fila = { ...u, taxistas: i >= 0 ? st.ubic[i].taxistas : t ? { placa: t.placa, numero_registro: t.numero_registro, perfiles: t.perfiles } : null };
+      if (i >= 0) st.ubic[i] = fila; else st.ubic.push(fila);
+      flota.poner(u.taxista_id, u.lat, u.lon, performance.now(), u.rumbo == null ? null : u.rumbo * Math.PI / 180);
+    }
+    $('cConectados').textContent = st.ubic.length;
+    if (mapa) mapa.redibujar();
+  }
   async function cargarUbic() {
     if (document.hidden || st.pestana !== 'vivo') return;
     const { data, error } = await sb.from('ubicaciones').select('*, taxistas(placa, numero_registro, perfiles(nombre))').neq('estado', 'fuera');
@@ -2378,9 +2392,10 @@ ${rueda(e1)}${rueda(e2)}
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos_membresia' }, pedirCarga)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas' }, pedirCarga)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, pedirCarga)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ubicaciones' }, alCambiarUbic)   // cada taxi, al instante
       .subscribe();
     setInterval(cargarTodo, 15000);   // todo lo demás, por si se corta el tiempo real
-    setInterval(cargarUbic, 4000);
+    setInterval(cargarUbic, 10000);   // y las posiciones, por si se pierde algún aviso
     document.addEventListener('visibilitychange', () => { if (!document.hidden) cargarUbic(); });
   }
   document.addEventListener('pointerdown', () => { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch {} }, { once: true });
