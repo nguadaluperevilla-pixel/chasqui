@@ -1,5 +1,5 @@
 // Chasqui Taxi · guarda la app en el celular para que abra rápido aunque la señal sea mala.
-const CACHE = 'chasqui-c22691b5c8';
+const CACHE = 'chasqui-da5a8b6e95';
 const BASE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'base.json', 'lugares.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(BASE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

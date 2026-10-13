@@ -78,7 +78,7 @@ h3{font-family:var(--font-display);font-weight:800;font-size:20px;letter-spacing
 .vivo{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
 @media (max-width:900px){.vivo{grid-template-columns:minmax(0,1fr)}}
 .mapa-caja{position:relative;height:min(68vh,620px);min-height:360px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--manzana)}
-#mapa{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#mapa,#mapaCalles{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .leyenda{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;color:var(--muted);margin-top:8px}
 .leyenda i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 
@@ -125,6 +125,14 @@ td input[type=number]{width:90px}
 .enlace{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:inherit}
 .clave-temp{margin-top:8px;background:var(--soft-arcilla);border-radius:10px;padding:10px 12px;font-size:15px}
 .clave-temp b{font-family:ui-monospace,Consolas,monospace;font-size:22px;letter-spacing:.12em;user-select:all}
+.cu-opciones{display:grid;gap:8px}
+.cu-opciones .btn{text-align:left}
+.cu-opciones .btn[aria-pressed="true"]{background:var(--soft-accent);border-color:var(--accent);color:var(--accent)}
+.cu-nota{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted);margin-top:12px}
+.cu-lista{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.cu-lista li{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:15px}
+.cu-lista li span{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+.cu-lista small{color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 18px;border-radius:999px;font-size:15px;z-index:40;max-width:calc(100% - 32px);text-align:center}
 </style>
 <style>
@@ -227,6 +235,7 @@ dialog.hojita .hojita-cuerpo{padding-top:18px}
         <button role="tab" data-p="reservas">Viajes largos<span class="globo" id="gReservas"></span></button>
         <button role="tab" data-p="alertas">Alertas<span class="globo" id="gAlertas"></span></button>
         <button role="tab" data-p="precios">Precios</button>
+        <button role="tab" data-p="calles">Calles</button>
         <button role="tab" data-p="equipo">Equipo</button>
       </nav>
     </div>
@@ -306,6 +315,35 @@ dialog.hojita .hojita-cuerpo{padding-top:18px}
       <p class="intro" id="tEjemplo" style="margin-top:10px"></p>
       <h3>Viajes largos</h3>
       <div class="tabla"><table><thead><tr><th>Destino</th><th>Provincia</th><th class="n">Ida S/</th><th class="n">Ida y vuelta S/</th><th class="n">Espera (h)</th><th>Precio confirmado</th><th>Visible</th><th></th></tr></thead><tbody id="dTabla"></tbody></table></div>
+    </section>
+
+    <section data-panel="calles" hidden>
+      <h2>Calles</h2>
+      <p class="intro">El mapa libre (OpenStreetMap) conoce pocos sentidos de Chachapoyas. Toca una cuadra y marca cómo se maneja ahí: al guardar, el servidor y todas las apps lo usan al instante (rutas, bots y despacho). Las flechitas grises son los sentidos que ya se conocen; el paseo de piedra con rayitas, las peatonales.</p>
+      <div class="vivo">
+        <div>
+          <div class="mapa-caja"><canvas id="mapaCalles" role="img" aria-label="Mapa para marcar el sentido de las calles y las peatonales"></canvas></div>
+          <div class="leyenda"><span><i style="background:var(--arcilla)"></i>cuadra elegida (la flecha roja marca «➜»)</span><span><i style="background:var(--accent)"></i>marcada por la central</span><span><i style="background:#E0301E"></i>punto que quedaría sin entrada o salida</span></div>
+        </div>
+        <div>
+          <p class="vacio" id="cuNada">Toca una cuadra en el mapa. Acércate con la rueda del mouse o con dos dedos.</p>
+          <div class="tarjeta" id="cuSel" hidden>
+            <div class="cab"><span class="tit" id="cuNombre"></span><span class="etq" id="cuEstado"></span></div>
+            <p class="intro" id="cuDetalle" style="margin:6px 0 10px"></p>
+            <div class="cu-opciones">
+              <button class="btn" data-tipo="doble">⇄ Doble sentido</button>
+              <button class="btn" data-tipo="ida">➜ Un sentido, como la flecha roja</button>
+              <button class="btn" data-tipo="vuelta">⬅ Un sentido, al revés de la flecha</button>
+              <button class="btn" data-tipo="peatonal">Peatonal, sin carros</button>
+              <button class="btn" data-tipo="osm">Volver a lo del mapa libre</button>
+            </div>
+            <label class="cu-nota">Nota (opcional)<input id="cuNota" maxlength="80" placeholder="Ej.: Ordenanza 282-2024"></label>
+            <p class="error" id="cuAviso" role="status"></p>
+          </div>
+          <h3>Lo que marcó la central</h3>
+          <ul class="cu-lista" id="cuLista"></ul>
+        </div>
+      </div>
     </section>
 
     <section data-panel="equipo" hidden>
@@ -390,8 +428,8 @@ globalThis.CHASQUI_CONFIG = {
   }
 
   /* Grafo vial a partir de data/chachapoyas_calles.json
-   * nodes: [[lat, lon], ...]   ways: [[esPrincipal, i, j, k, ...], ...]
-   * Se trata como no dirigido: el demo ignora el sentido de las calles. */
+   * nodes: [[lat, lon], ...]   ways: [[esPrincipal, i, j, k, ...], ...]   ow: sentido de cada calle
+   * Las rutas respetan los sentidos y las peatonales (las de OSM y las que corrige la central con ajustar). */
   class Grafo {
     constructor(data) {
       this.nodes = data.nodes;
@@ -400,8 +438,10 @@ globalThis.CHASQUI_CONFIG = {
       // adj: vecinos por la calle, en cualquier sentido (para direcciones y lo que no es manejar)
       // entra: por dónde se puede LLEGAR a cada punto manejando, respetando las calles de un solo sentido
       // (data.ow, tools/osm_sentidos.py: 1 = solo en el orden de los nodos, -1 = solo al revés, 0 = doble)
-      const adj = new Array(n), entra = new Array(n), ow = data.ow || [];
-      for (let i = 0; i < n; i++) { adj[i] = []; entra[i] = []; }
+      // tramos: [a, b, metros, sentido]; sentido 1 = solo a→b, -1 = solo b→a, 0 = doble, 2 = peatonal (sin carros)
+      const adj = new Array(n), ow = data.ow || [];
+      for (let i = 0; i < n; i++) adj[i] = [];
+      this.tramos = []; this.tramoDe = new Map();
       data.ways.forEach((w, wi) => {
         const s = ow[wi] || 0;
         for (let k = 1; k < w.length - 1; k++) {
@@ -409,11 +449,14 @@ globalThis.CHASQUI_CONFIG = {
           const d = haversine(this.nodes[a], this.nodes[b]);
           adj[a].push(b, d);
           adj[b].push(a, d);
-          if (s >= 0) entra[b].push(a, d);   // se puede ir de a a b
-          if (s <= 0) entra[a].push(b, d);   // se puede ir de b a a
+          const clave = a < b ? a + '-' + b : b + '-' + a;
+          if (!this.tramoDe.has(clave)) this.tramoDe.set(clave, []);
+          this.tramoDe.get(clave).push(this.tramos.length);
+          this.tramos.push([a, b, d, s, s]);   // el último: lo que dice OpenStreetMap
         }
       });
-      this.adj = adj; this.entra = entra;
+      this.adj = adj;
+      this._armarEntra();
       this.celda = 0.002;
       this.rejilla = new Map();
       for (let i = 0; i < n; i++) {
@@ -424,11 +467,44 @@ globalThis.CHASQUI_CONFIG = {
       }
     }
 
+    // entra: por dónde se puede LLEGAR a cada punto manejando; maneja[i] = 1 si al punto llega o sale alguna calle con carros
+    _armarEntra() {
+      const n = this.nodes.length, entra = new Array(n), maneja = new Uint8Array(n);
+      for (let i = 0; i < n; i++) entra[i] = [];
+      for (const [a, b, d, s] of this.tramos) {
+        if (s === 0 || s === 1) entra[b].push(a, d);    // se puede ir de a a b
+        if (s === 0 || s === -1) entra[a].push(b, d);   // se puede ir de b a a
+        if (s !== 2) maneja[a] = maneja[b] = 1;
+      }
+      this.entra = entra; this.maneja = maneja;
+      this.version = (this.version || 0) + 1;   // el mapa redibuja peatonales y flechas cuando cambia
+    }
+
+    /* Lo que marcó la central (tabla calles_ajustes): [{a_la, a_lo, b_la, b_lo, tipo}] con las puntas en enteros de
+       1e-5 grados; tipo 'ida' (solo de a hacia b), 'doble' o 'peatonal'. Reemplaza lo de OpenStreetMap en esos tramos. */
+    ajustar(lista) {
+      if (!this.porPunto) {
+        this.porPunto = new Map();
+        this.nodes.forEach((p, i) => this.porPunto.set(Math.round(p[0] * 1e5) + ',' + Math.round(p[1] * 1e5), i));
+      }
+      for (const t of this.tramos) t[3] = t[4];
+      for (const j of lista || []) {
+        const ia = this.porPunto.get(j.a_la + ',' + j.a_lo), ib = this.porPunto.get(j.b_la + ',' + j.b_lo);
+        if (ia === undefined || ib === undefined) continue;
+        for (const k of this.tramoDe.get(ia < ib ? ia + '-' + ib : ib + '-' + ia) || []) {
+          const t = this.tramos[k];
+          t[3] = j.tipo === 'peatonal' ? 2 : j.tipo === 'doble' ? 0 : t[0] === ia ? 1 : -1;
+        }
+      }
+      this._armarEntra();
+    }
+
     _clave(lat, lon) {
       return Math.floor(lat / this.celda) + ':' + Math.floor(lon / this.celda);
     }
 
-    cercano(lat, lon) {
+    /* El punto de calle más cercano por donde pasan carros (todos: true = también los de las peatonales). */
+    cercano(lat, lon, todos = false) {
       const fi = Math.floor(lat / this.celda), fj = Math.floor(lon / this.celda);
       let mejor = -1, mejorD = Infinity;
       for (let r = 0; r <= 6; r++) {
@@ -438,6 +514,7 @@ globalThis.CHASQUI_CONFIG = {
             const lista = this.rejilla.get((fi + di) + ':' + (fj + dj));
             if (!lista) continue;
             for (const i of lista) {
+              if (!todos && !this.maneja[i]) continue;
               const d = haversine([lat, lon], this.nodes[i]);
               if (d < mejorD) { mejorD = d; mejor = i; }
             }
@@ -446,6 +523,39 @@ globalThis.CHASQUI_CONFIG = {
         if (mejor >= 0 && r >= 1) break;
       }
       return mejor;
+    }
+
+    /* Por qué esquina empezar (salir = true) o terminar (salir = false) una ruta desde un punto a media cuadra, sin
+       andar en contra: en una calle de un sentido se sale hacia adelante y se llega desde atrás; en doble sentido se
+       sale hacia donde ya mira el carro (rumbo en radianes, como Flota) o, si no se sabe, por la esquina más cerca. */
+    nodoEnSentido(lat, lon, salir, rumbo = null) {
+      const n0 = this.cercano(lat, lon);
+      if (n0 < 0 || haversine([lat, lon], this.nodes[n0]) < 4) return n0;
+      if (!this._inc) {
+        this._inc = Array.from({ length: this.nodes.length }, () => []);
+        this.tramos.forEach((t, k) => { this._inc[t[0]].push(k); this._inc[t[1]].push(k); });
+      }
+      const kx = Math.cos(lat * Math.PI / 180), fi = Math.floor(lat / this.celda), fj = Math.floor(lon / this.celda);
+      let mejor = null, mejorD = Infinity, mejorU = 0, rumboAB = 0;
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+        for (const i of this.rejilla.get((fi + di) + ':' + (fj + dj)) || []) for (const k of this._inc[i]) {
+          const t = this.tramos[k]; if (t[3] === 2) continue;
+          const A = this.nodes[t[0]], B = this.nodes[t[1]];
+          const bx = (B[1] - A[1]) * kx, by = B[0] - A[0], px = (lon - A[1]) * kx, py = lat - A[0], L = bx * bx + by * by;
+          const u = L ? Math.max(0, Math.min(1, (px * bx + py * by) / L)) : 0;
+          const d = (px - u * bx) ** 2 + (py - u * by) ** 2;
+          if (d < mejorD) { mejorD = d; mejor = t; mejorU = u; rumboAB = Math.atan2(bx, by); }
+        }
+      }
+      if (!mejor) return n0;
+      const [a, b, , s] = mejor;
+      if (s === 1) return salir ? b : a;
+      if (s === -1) return salir ? a : b;
+      if (salir && rumbo != null) {
+        const dif = Math.abs(((rumbo - rumboAB) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
+        return dif < Math.PI / 2 ? b : a;
+      }
+      return mejorU < 0.5 ? a : b;
     }
 
     /* Distancias (m) manejando DESDE cada nodo HASTA src (src es la meta), respetando el sentido de las calles.
@@ -644,7 +754,29 @@ globalThis.CHASQUI_CONFIG = {
     return { metros, tarifa: tarifaSugerida(metros), mejor };
   }
 
-  root.Chasqui = { Grafo, haversine, Modelo, TARIFA, tarifaSugerida, asignacionOptima, despachar, cotizar, candidatos };
+  /* Trae de la base lo que marcó la central (sentidos y peatonales) y lo aplica al grafo. Lo último que se bajó
+     queda guardado en el celular, así sin señal también se respeta. alCambiar() se llama si algo cambió. */
+  // lo que ya se sabía al publicar (supabase/019): el Jr. Amazonas peatonal, de la Plaza a las escaleras
+  const AJUSTES_BASE = [[-622983, -7787277, -622987, -7787366], [-622987, -7787366, -622992, -7787452], [-622992, -7787452, -622996, -7787538],
+    [-622996, -7787538, -623002, -7787662], [-623002, -7787662, -623004, -7787704]].map(([a_la, a_lo, b_la, b_lo]) => ({ a_la, a_lo, b_la, b_lo, tipo: 'peatonal' }));
+  function cargarAjustes(grafo, sb, alCambiar) {
+    const LLAVE = 'chasqui.ajustesCalles';
+    let previo = '';
+    try { previo = localStorage.getItem(LLAVE) || ''; } catch (e) { previo = ''; }
+    try { grafo.ajustar(previo ? JSON.parse(previo) : AJUSTES_BASE); } catch (e) { previo = ''; grafo.ajustar(AJUSTES_BASE); }
+    if (!sb) return Promise.resolve(false);
+    return sb.from('calles_ajustes').select('a_la,a_lo,b_la,b_lo,tipo').then(({ data, error }) => {
+      if (error || !data) return false;
+      const texto = JSON.stringify(data);
+      if (texto === previo) return false;
+      grafo.ajustar(data);
+      try { localStorage.setItem(LLAVE, texto); } catch (e) { /* sin espacio: igual sirve en esta sesión */ }
+      if (alCambiar) alCambiar(data);
+      return true;
+    }, () => false);
+  }
+
+  root.Chasqui = { Grafo, haversine, cargarAjustes, Modelo, TARIFA, tarifaSugerida, asignacionOptima, despachar, cotizar, candidatos };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 /* Chasqui · direcciones al estilo de Chachapoyas a partir del grafo de OpenStreetMap
@@ -1187,16 +1319,18 @@ ${rueda(e1)}${rueda(e2)}
       a.ultimo = ahora;
       if (d < 2) { if (rumboGps != null) a.rumboObj = rumboGps; return a; }
       if (d > 700) { a.camino = [[lat, lon]]; a.acum = [0]; a.t0 = ahora; a.dur = 1; if (rumboGps != null) a.rumbo = a.rumboObj = rumboGps; return a; }
-      const camino = this.porCalles([cur.lat, cur.lon], [lat, lon], d);
+      const camino = this.porCalles([cur.lat, cur.lon], [lat, lon], d, cur.rumbo);
       const acum = [0];
       for (let i = 1; i < camino.length; i++) acum.push(acum[i - 1] + this.dist(camino[i - 1], camino[i]));
       a.camino = camino; a.acum = acum; a.t0 = ahora; a.dur = intervalo * 1.05;
       return a;
     }
-    porCalles(p, q, d) {
+    porCalles(p, q, d, rumbo = null) {
       const g = this.g;
       if (!g || d < 12) return [p, q];
-      const n1 = g.cercano(p[0], p[1]), n2 = g.cercano(q[0], q[1]);
+      // sale hacia adelante por su calle y llega por donde la calle deja (nunca media cuadra en contra)
+      const n1 = g.nodoEnSentido ? g.nodoEnSentido(p[0], p[1], true, rumbo) : g.cercano(p[0], p[1]);
+      const n2 = g.nodoEnSentido ? g.nodoEnSentido(q[0], q[1], false) : g.cercano(q[0], q[1]);
       if (n1 < 0 || n2 < 0 || n1 === n2) return [p, q];
       const arbol = g.dijkstra(n2, d * 3 + 200);
       const ruta = g.rutaHacia(arbol, n1);
@@ -1283,10 +1417,12 @@ ${rueda(e1)}${rueda(e2)}
     dia: { suelo: '#F0EBE1', casa: '#E0B9A2', muro: '#C59A84', sombra: 'rgba(96,62,44,.20)', borde: 'rgba(120,78,56,.35)',
       plaza: '#CFE2BC', deporte: '#C3DDB0', bosque: '#DAE6CC', campo: '#ECE9D4', cementerio: '#D9E2D0', agua: '#B8D6E4', aero: '#E5E1D8', pista: '#CBC5B8',
       calle: '#FFFFFF', calleBorde: '#D8CEBD', mayor: '#FBEFC9', mayorBorde: '#D6BE86', peaton: '#B9A98F',
+      paseo: '#EADFC9', flecha: '#9A8F7A',
       texto: '#4C4A42', textoFuerte: '#1B2620', halo: '#F0EBE1', neblinaMapa: '#E9EEEC' },
     noche: { suelo: '#121915', casa: '#3B2B25', muro: '#281D19', sombra: 'rgba(0,0,0,.45)', borde: 'rgba(0,0,0,.35)',
       plaza: '#1B2D20', deporte: '#1D3121', bosque: '#16241A', campo: '#1A1F18', cementerio: '#1A251C', agua: '#16323D', aero: '#1C211D', pista: '#2C322D',
       calle: '#2C3530', calleBorde: '#0B100D', mayor: '#4D4532', mayorBorde: '#191610', peaton: '#4E5650',
+      paseo: '#3A372E', flecha: '#7C877F',
       texto: '#B8B5A8', textoFuerte: '#E8E5DA', halo: '#121915', neblinaMapa: '#0B1210' },
   };
   const CAPAS_AREA = ['campo', 'bosque', 'cementerio', 'aero', 'deporte', 'plaza', 'agua'];
@@ -1780,6 +1916,45 @@ ${rueda(e1)}${rueda(e2)}
     }
 
     /* ---- dibujo del mapa ---- */
+    /* calles peatonales (sin carros) como paseo de piedra, y flechitas en las de un solo sentido cuando hay zoom.
+       Salen del grafo (OSM + lo que marcó la central) y se rearman solas si la central cambia algo. */
+    let sentidos = null;
+    function sentidosDeCalle(ppm, anchoMenor, xv, yv) {
+      if (!grafo.tramos) return;
+      if (!sentidos || sentidos.v !== grafo.version) {
+        const paseo = new Path2D(), flechas = [];
+        for (const [a, b, d, s] of grafo.tramos) {
+          const p = grafo.nodes[a], q = grafo.nodes[b];
+          if (s === 2) { paseo.moveTo(mx(p[1]), my(p[0])); paseo.lineTo(mx(q[1]), my(q[0])); }
+          else if ((s === 1 || s === -1) && d > 14) {
+            const [u, v] = s === 1 ? [p, q] : [q, p];
+            flechas.push([mx(u[1]), my(u[0]), mx(v[1]), my(v[0]), d]);
+          }
+        }
+        sentidos = { v: grafo.version, paseo, flechas };
+      }
+      const w = anchoMenor / ppm;   // ancho de la calle en metros
+      ctx.strokeStyle = col.paseo; ctx.lineWidth = w; ctx.lineCap = 'butt'; ctx.stroke(sentidos.paseo);
+      if (ppm >= 1.1) { ctx.strokeStyle = col.peaton; ctx.lineWidth = Math.max(0.6, 1.1 / ppm); ctx.setLineDash([w * 0.25, w * 0.35]); ctx.stroke(sentidos.paseo); ctx.setLineDash([]); }
+      ctx.lineCap = 'round';
+      if (ppm < 0.9) return;
+      const x0 = xv - W / 2 / ppm - 20, x1 = xv + W / 2 / ppm + 20, y0 = yv - H / 2 / ppm - 20, y1 = yv + H / 2 / ppm + 20;
+      const r = w * 0.26, paso = Math.max(45, 70 / ppm);
+      ctx.strokeStyle = col.flecha; ctx.lineWidth = Math.max(0.5, w * 0.09); ctx.lineJoin = 'miter';
+      ctx.beginPath();
+      for (const [ax, ay, bx, by, d] of sentidos.flechas) {
+        if (Math.max(ax, bx) < x0 || Math.min(ax, bx) > x1 || Math.max(ay, by) < y0 || Math.min(ay, by) > y1) continue;
+        const L = Math.hypot(bx - ax, by - ay); if (!L) continue;
+        const ux = (bx - ax) / L, uy = (by - ay) / L, n = Math.max(1, Math.floor(L / paso));
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n, cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
+          ctx.moveTo(cx - ux * r - uy * r, cy - uy * r + ux * r);
+          ctx.lineTo(cx + ux * r * 0.6, cy + uy * r * 0.6);
+          ctx.lineTo(cx - ux * r + uy * r, cy - uy * r - ux * r);
+        }
+      }
+      ctx.stroke(); ctx.lineJoin = 'round';
+    }
     const h = { ctx, get dpr() { return dpr; }, get col() { return col; }, get noche() { return noche; }, t: 0,
       xy, trazo, ruta, rombo, pin, bandera, carro, chapa, grupos, burbuja, rotulo, auto, calle, pxPorMetro };
     function dibujar() {
@@ -1822,6 +1997,7 @@ ${rueda(e1)}${rueda(e2)}
       ctx.strokeStyle = col.calle; ctx.lineWidth = anchoMenor / ppm; ctx.stroke(calleMenor);
       ctx.strokeStyle = col.mayor; ctx.lineWidth = anchoMayor / ppm; ctx.stroke(calleMayor);
       if (ppm >= 1.4) { ctx.strokeStyle = col.peaton; ctx.lineWidth = 1.2 / ppm; ctx.setLineDash([3 / ppm, 3 / ppm]); ctx.stroke(peatonal); ctx.setLineDash([]); }
+      sentidosDeCalle(ppm, anchoMenor, xv, yv);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
 
       // neblina de ceja de selva en los bordes: el mapa se funde como la ciudad entre las nubes
@@ -2007,12 +2183,172 @@ ${rueda(e1)}${rueda(e2)}
     }
   }
 
+  /* ---------- calles: sentidos y peatonales que marca la central (tabla calles_ajustes) ----------
+     Se elige una cuadra entera (de esquina a esquina) y se guarda tramo por tramo con admin_calle. */
+  C.cargarAjustes(grafo, sb, () => { if (mapa) mapa.redibujar(); if (mapaC) mapaC.redibujar(); });
+  let mapaC = null;
+  const cu = { nodos: null, ajustes: [], aislados: [] };
+  const grado = n => new Set(grafo.adj[n].filter((_, k) => k % 2 === 0)).size;
+  const vecinos = n => [...new Set(grafo.adj[n].filter((_, k) => k % 2 === 0))];
+  const e5 = n => [Math.round(grafo.nodes[n][0] * 1e5), Math.round(grafo.nodes[n][1] * 1e5)];
+  const tramoEntre = (u, v) => { const ks = grafo.tramoDe.get(u < v ? u + '-' + v : v + '-' + u); return ks ? grafo.tramos[ks[0]] : null; };
+  // ¿se puede manejar de u a v por este tramo?
+  const pasa = (u, v) => { const t = tramoEntre(u, v); if (!t) return false; const s = t[3]; return s === 0 || (s === 1 && t[0] === u) || (s === -1 && t[0] === v); };
+  function tramoCercano(la, lo) {
+    const kx = Math.cos(la * Math.PI / 180);
+    let mejor = null, mejorD = Infinity;
+    for (const t of grafo.tramos) {
+      const A = grafo.nodes[t[0]], B = grafo.nodes[t[1]];
+      const bx = (B[1] - A[1]) * kx, by = B[0] - A[0], px = (lo - A[1]) * kx, py = la - A[0], L = bx * bx + by * by;
+      const u = L ? Math.max(0, Math.min(1, (px * bx + py * by) / L)) : 0, d = (px - u * bx) ** 2 + (py - u * by) ** 2;
+      if (d < mejorD) { mejorD = d; mejor = t; }
+    }
+    return mejor ? { t: mejor, m: Math.sqrt(mejorD) * 110574 } : null;
+  }
+  // la cuadra entera: desde el tramo tocado, se sigue por los puntos que no son esquina (solo 2 vecinos)
+  function cuadraDe(a, b) {
+    const ir = (prev, u) => { const out = []; let guard = 0; while (grado(u) === 2 && guard++ < 200) { const sig = vecinos(u).find(v => v !== prev); if (sig === undefined || out.includes(sig) || sig === a || sig === b) break; out.push(sig); prev = u; u = sig; } return out; };
+    return [...ir(b, a).reverse(), a, b, ...ir(a, b)];
+  }
+  function nombreCuadra(ns) {
+    const callesDe = n => D.callesNodo[n] || [];
+    const comun = callesDe(ns[0]).find(c => ns.every((n, i) => i === 0 || i === ns.length - 1 || callesDe(n).includes(c)) && callesDe(ns[ns.length - 1]).includes(c));
+    const calle = comun ?? callesDe(ns[Math.floor(ns.length / 2)])[0];
+    if (calle === undefined) return D.direccion(ns[Math.floor(ns.length / 2)]).texto;
+    const cruce = n => callesDe(n).find(c => c !== calle);
+    const c1 = cruce(ns[0]), c2 = cruce(ns[ns.length - 1]);
+    return D.corto(D.CALLES[calle]) + (c1 !== undefined && c2 !== undefined ? ' entre ' + D.corto(D.CALLES[c1]) + ' y ' + D.corto(D.CALLES[c2]) : '');
+  }
+  function estadoCuadra(ns) {
+    let ida = 0, vuelta = 0, doble = 0, peat = 0, marcada = 0;
+    const claves = new Set(cu.ajustes.map(j => [j.a_la, j.a_lo, j.b_la, j.b_lo].join(',')));
+    for (let i = 0; i + 1 < ns.length; i++) {
+      const u = ns[i], v = ns[i + 1], f = pasa(u, v), r = pasa(v, u), t = tramoEntre(u, v);
+      if (t && t[3] === 2) peat++; else if (f && r) doble++; else if (f) ida++; else if (r) vuelta++;
+      if (claves.has([...e5(u), ...e5(v)].join(',')) || claves.has([...e5(v), ...e5(u)].join(','))) marcada++;
+    }
+    const n = ns.length - 1;
+    const tipo = peat === n ? 'peatonal' : doble === n ? 'doble' : ida === n ? 'ida' : vuelta === n ? 'vuelta' : 'mixta';
+    return { tipo, marcada: marcada > 0 };
+  }
+  const ETIQUETA = { peatonal: 'Peatonal', doble: 'Doble sentido', ida: 'Un sentido ➜', vuelta: 'Un sentido ⬅', mixta: 'Mezclada' };
+  function pintarCuadra() {
+    const ns = cu.nodos;
+    $('cuNada').hidden = !!ns; $('cuSel').hidden = !ns;
+    if (!ns) return;
+    const e = estadoCuadra(ns), metros = Math.round(grafo.largoRuta(ns));
+    $('cuNombre').textContent = nombreCuadra(ns);
+    $('cuEstado').textContent = ETIQUETA[e.tipo];
+    $('cuEstado').className = 'etq' + (e.tipo === 'peatonal' ? ' mal' : e.tipo === 'doble' ? ' ok' : ' warn');
+    $('cuDetalle').textContent = metros + ' m · ' + (e.marcada ? 'marcada por la central' : 'así viene del mapa libre (OpenStreetMap)');
+    document.querySelectorAll('.cu-opciones .btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tipo === e.tipo || (b.dataset.tipo === 'osm' && !e.marcada))));
+    mapaC.redibujar();
+  }
+  function tocarCalle(la, lo) {
+    const r = tramoCercano(la, lo);
+    if (!r || r.m > Math.max(25, 22 / mapaC.pxPorMetro())) { cu.nodos = null; pintarCuadra(); aviso('Toca sobre una calle'); return; }
+    cu.nodos = cuadraDe(r.t[0], r.t[1]);
+    $('cuAviso').textContent = '';
+    pintarCuadra();
+  }
+  // puntos que con los sentidos actuales no se pueden alcanzar desde la Plaza o no pueden volver a ella
+  function revisarAislados() {
+    const n = grafo.nodes.length, sale = Array.from({ length: n }, () => []);
+    for (let v = 0; v < n; v++) for (let k = 0; k < grafo.entra[v].length; k += 2) sale[grafo.entra[v][k]].push(v);
+    const plaza = grafo.cercano(-6.22936, -77.87239);
+    const alcanza = lista => { const vis = new Uint8Array(n), pila = [plaza]; vis[plaza] = 1; while (pila.length) { const u = pila.pop(); for (const v of lista(u)) if (!vis[v]) { vis[v] = 1; pila.push(v); } } return vis; };
+    const ida = alcanza(u => sale[u]), vuelta = alcanza(u => grafo.entra[u].filter((_, k) => k % 2 === 0));
+    // solo los de la parte de la ciudad conectada (lejos hay trochas sueltas que el mapa libre no une)
+    cu.aislados = [];
+    for (let i = 0; i < n; i++) if (grafo.maneja[i] && (ida[i] !== vuelta[i]) && C.haversine(grafo.nodes[i], grafo.nodes[plaza]) < 3000) cu.aislados.push(i);
+    return cu.aislados.length;
+  }
+  async function cargarAjustesCentral() {
+    const { data, error } = await sb.from('calles_ajustes').select('a_la,a_lo,b_la,b_lo,tipo,nota,cambiado').order('cambiado', { ascending: false });
+    if (error) { aviso('No se pudieron leer las calles: ' + error.message); return; }
+    cu.ajustes = data || [];
+    grafo.ajustar(cu.ajustes);
+    try { localStorage.setItem('chasqui.ajustesCalles', JSON.stringify(cu.ajustes.map(({ a_la, a_lo, b_la, b_lo, tipo }) => ({ a_la, a_lo, b_la, b_lo, tipo })))); } catch {}
+    revisarAislados();
+    pintarListaCalles();
+    if (cu.nodos) pintarCuadra();
+    if (mapa) mapa.redibujar(); if (mapaC) mapaC.redibujar();
+  }
+  function pintarListaCalles() {
+    const ul = $('cuLista'); ul.replaceChildren();
+    if (!cu.ajustes.length) { ul.append(el('li', { className: 'vacio' }, 'Todavía nada: todo viene del mapa libre.')); return; }
+    // cada guardado es una cuadra: se agrupa por la hora en que se marcó
+    const grupos = new Map();
+    for (const j of cu.ajustes) { const k = j.cambiado + '|' + j.tipo; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(j); }
+    for (const js of grupos.values()) {
+      // las cuadras de este guardado (de esquina a esquina)
+      const cuadras = [], vistos = new Set();
+      for (const x of js) {
+        const a = grafo.porPunto.get(x.a_la + ',' + x.a_lo), b = grafo.porPunto.get(x.b_la + ',' + x.b_lo);
+        if (a === undefined || b === undefined || vistos.has(a + '-' + b)) continue;
+        const ns = cuadraDe(a, b); cuadras.push(ns);
+        for (let i = 0; i + 1 < ns.length; i++) { vistos.add(ns[i] + '-' + ns[i + 1]); vistos.add(ns[i + 1] + '-' + ns[i]); }
+      }
+      if (!cuadras.length) continue;
+      const j = js[0], ns = cuadras[0], todos = cuadras.flat();
+      const ver = el('button', { className: 'btn', textContent: 'Ver', type: 'button' });
+      ver.addEventListener('click', () => { cu.nodos = ns; pintarCuadra(); mapaC.encuadrar(todos.map(n => grafo.nodes[n]), 90); });
+      ul.append(el('li', {}, el('span', {}, el('b', { textContent: j.tipo === 'ida' ? 'Un sentido' : ETIQUETA[j.tipo] }),
+        ' · ' + nombreCuadra(ns) + (cuadras.length > 1 ? ' y ' + (cuadras.length - 1) + (cuadras.length > 2 ? ' cuadras más' : ' cuadra más') : ''),
+        el('br'), el('small', { textContent: (j.nota ? j.nota + ' · ' : '') + fecha(j.cambiado) })), ver));
+    }
+  }
+  async function marcarCuadra(tipo) {
+    const ns = cu.nodos; if (!ns) return;
+    const pares = [];
+    for (let i = 0; i + 1 < ns.length; i++) pares.push(tipo === 'vuelta' ? [...e5(ns[i + 1]), ...e5(ns[i])] : [...e5(ns[i]), ...e5(ns[i + 1])]);
+    if (tipo === 'vuelta') pares.reverse();
+    document.querySelectorAll('.cu-opciones .btn').forEach(b => { b.disabled = true; });
+    const { error } = await sb.rpc('admin_calle', { p_tramos: pares, p_tipo: tipo === 'vuelta' ? 'ida' : tipo, p_nota: $('cuNota').value || null });
+    document.querySelectorAll('.cu-opciones .btn').forEach(b => { b.disabled = false; });
+    if (error) { aviso(error.message || 'No se pudo guardar'); return; }
+    await cargarAjustesCentral();
+    const n = cu.aislados.length;
+    $('cuAviso').textContent = n ? 'Ojo: con los sentidos de ahora, ' + n + ' punto(s) de calle quedan sin entrada o sin salida (en rojo). Revisa las flechas cerca.' : '';
+    aviso('Guardado: ' + ETIQUETA[tipo === 'osm' ? estadoCuadra(ns).tipo : tipo] + '. Ya lo usan el servidor y las apps.');
+  }
+  document.querySelectorAll('.cu-opciones .btn').forEach(b => b.addEventListener('click', () => marcarCuadra(b.dataset.tipo)));
+  function encimaCalles(h) {
+    const { ctx, col, dpr, xy } = h;
+    // lo marcado por la central, en verde suave
+    for (const j of cu.ajustes) {
+      const a = grafo.porPunto && grafo.porPunto.get(j.a_la + ',' + j.a_lo), b = grafo.porPunto && grafo.porPunto.get(j.b_la + ',' + j.b_lo);
+      if (a !== undefined && b !== undefined) h.trazo([a, b], 10, col.accent + '55');
+    }
+    if (cu.nodos) {
+      const ns = cu.nodos;
+      h.ruta(ns, col.arcilla, { ancho: 7, rombos: false });
+      // flecha roja al medio: el sentido «➜»
+      const L = grafo.largoRuta(ns); let s = 0, i = 0;
+      while (i + 1 < ns.length - 1 && s + C.haversine(grafo.nodes[ns[i]], grafo.nodes[ns[i + 1]]) < L / 2) { s += C.haversine(grafo.nodes[ns[i]], grafo.nodes[ns[i + 1]]); i++; }
+      const [x1, y1] = xy(...grafo.nodes[ns[i]]), [x2, y2] = xy(...grafo.nodes[ns[i + 1]]);
+      const d = Math.hypot(x2 - x1, y2 - y1) || 1, ux = (x2 - x1) / d, uy = (y2 - y1) / d, cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, r = 13 * dpr;
+      ctx.beginPath(); ctx.moveTo(cx + ux * r, cy + uy * r); ctx.lineTo(cx - ux * r * 0.7 - uy * r * 0.8, cy - uy * r * 0.7 + ux * r * 0.8); ctx.lineTo(cx - ux * r * 0.7 + uy * r * 0.8, cy - uy * r * 0.7 - ux * r * 0.8); ctx.closePath();
+      ctx.fillStyle = '#E0301E'; ctx.fill(); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#fff'; ctx.stroke();
+    }
+    for (const n of cu.aislados) { const [x, y] = xy(...grafo.nodes[n]); ctx.beginPath(); ctx.arc(x, y, 5 * dpr, 0, Math.PI * 2); ctx.fillStyle = '#E0301E'; ctx.fill(); }
+  }
+  function abrirCalles() {
+    if (!mapaC) {
+      mapaC = ChasquiMapa.crear({ canvas: $('mapaCalles'), grafo, calles: D, lugares: LUGARES, encima: encimaCalles, alTocar: tocarCalle });
+      ChasquiMapa.cargarBase('base.json').then(b => mapaC.ponerBase(b));
+      mapaC.centrar(-6.22936, -77.87239, 260000);
+    } else { mapaC.medir(); mapaC.redibujar(); }
+    cargarAjustesCentral();
+  }
+
   /* ---------- pestañas ---------- */
   function pestana(p) {
     st.pestana = p;
     document.querySelectorAll('nav.pestanas button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.p === p)));
     document.querySelectorAll('[data-panel]').forEach(s => { s.hidden = s.dataset.panel !== p; });
     if (p === 'vivo' && mapa) { mapa.medir(); mapa.redibujar(); cargarUbic(true); }   // al volver a «En vivo», todo al día
+    if (p === 'calles') abrirCalles();
   }
   document.querySelectorAll('nav.pestanas button').forEach(b => b.addEventListener('click', () => pestana(b.dataset.p)));
   $('verAlerta').addEventListener('click', () => pestana('alertas'));

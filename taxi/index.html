@@ -663,16 +663,18 @@ ${rueda(e1)}${rueda(e2)}
       a.ultimo = ahora;
       if (d < 2) { if (rumboGps != null) a.rumboObj = rumboGps; return a; }
       if (d > 700) { a.camino = [[lat, lon]]; a.acum = [0]; a.t0 = ahora; a.dur = 1; if (rumboGps != null) a.rumbo = a.rumboObj = rumboGps; return a; }
-      const camino = this.porCalles([cur.lat, cur.lon], [lat, lon], d);
+      const camino = this.porCalles([cur.lat, cur.lon], [lat, lon], d, cur.rumbo);
       const acum = [0];
       for (let i = 1; i < camino.length; i++) acum.push(acum[i - 1] + this.dist(camino[i - 1], camino[i]));
       a.camino = camino; a.acum = acum; a.t0 = ahora; a.dur = intervalo * 1.05;
       return a;
     }
-    porCalles(p, q, d) {
+    porCalles(p, q, d, rumbo = null) {
       const g = this.g;
       if (!g || d < 12) return [p, q];
-      const n1 = g.cercano(p[0], p[1]), n2 = g.cercano(q[0], q[1]);
+      // sale hacia adelante por su calle y llega por donde la calle deja (nunca media cuadra en contra)
+      const n1 = g.nodoEnSentido ? g.nodoEnSentido(p[0], p[1], true, rumbo) : g.cercano(p[0], p[1]);
+      const n2 = g.nodoEnSentido ? g.nodoEnSentido(q[0], q[1], false) : g.cercano(q[0], q[1]);
       if (n1 < 0 || n2 < 0 || n1 === n2) return [p, q];
       const arbol = g.dijkstra(n2, d * 3 + 200);
       const ruta = g.rutaHacia(arbol, n1);
