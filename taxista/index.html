@@ -201,6 +201,27 @@ dialog.hojita::backdrop{background:rgba(10,20,14,.55)}
 .hojita-cuerpo{padding:12px 18px 22px;overflow-y:auto;max-height:calc(88vh - 76px)}
 .menu-lista{list-style:none;margin:0;padding:0}
 .menu-lista button,.menu-lista a{display:flex;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:15px 4px;font-size:17px;color:var(--ink);text-decoration:none}
+/* Mi caja: el día en números (supabase/021) */
+.km-barra{display:flex;height:16px;border-radius:999px;overflow:hidden;background:var(--line);margin:6px 0 4px}
+.km-barra span{display:block;height:100%}
+.km-barra .libre{background:var(--arcilla)} .km-barra .recoger{background:var(--neblina)} .km-barra .pasajero{background:var(--accent)}
+.km-ley{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--muted);margin:0 0 10px}
+.km-ley i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.gasolina{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.gasolina input{width:100%}
+.horas{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));align-items:end;gap:2px;height:84px;margin:6px 0 2px;border-bottom:1px solid var(--line)}
+.horas span{display:block;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.horas span.top{background:var(--ocre)}
+.horas-eje{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:2px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.horas-eje span{grid-column:span 6;white-space:nowrap}   /* cada rótulo empieza justo en la barra de su hora */
+.dias td,.dias th{padding:6px 4px;border-bottom:1px solid var(--line);font-size:14px;text-align:right;font-variant-numeric:tabular-nums}
+.dias th{font-size:12px;color:var(--muted);font-weight:700}
+.dias td:first-child,.dias th:first-child{text-align:left}
+.dias{width:100%;border-collapse:collapse}
+.candado{background:var(--soft-arcilla);border-radius:14px;padding:12px 14px;margin:10px 0}
+.res-abierta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.res-abierta .secundario{width:auto;margin-top:6px;padding:9px 14px;font-size:15px}
+.res-abierta .secundario[aria-pressed="true"]{background:var(--soft-accent);border-color:var(--accent);color:var(--accent);font-weight:700}
 .lista-viajes{list-style:none;margin:0;padding:0}
 .lista-viajes li{border-bottom:1px solid var(--line);padding:10px 2px;font-size:15px}
 .lista-viajes b{float:right}
@@ -445,8 +466,9 @@ dialog.hojita .hojita-cuerpo{padding-top:18px}
     <ul class="menu-lista">
       <li><button id="mMembresia">Mi membresía</button></li>
       <li><button id="mPlus">Chasqui Plus: zonas calientes</button></li>
+      <li><button id="mMiCaja">Mi caja: lo que gano y lo que gasto</button></li>
       <li><button id="mViajes">Mis viajes</button></li>
-      <li><button id="mReservas">Viajes largos reservados</button></li>
+      <li><button id="mReservas">Viajes largos (Kuélap, Gocta…)</button></li>
       <li><button id="mCaja">Caja Chasqui (Bluetooth)</button></li>
       <li><button id="mPrueba">Modo prueba (estoy fuera de Chachapoyas)</button></li>
       <li><button id="mClave">Cambiar mi clave</button></li>
@@ -464,8 +486,11 @@ dialog.hojita .hojita-cuerpo{padding-top:18px}
     <p><b>Menos vueltas, menos gasolina.</b> La app aprende de cada pedido de Chachapoyas dónde y a qué hora sale la gente, y cuántos taxis ya están esperando en cada sitio. Con Plus ves en el mapa, en vivo, las zonas donde conseguirías pasajero más rápido desde donde estás.</p>
     <ul class="nota" style="padding-left:18px;margin:0 0 10px">
       <li>Las 3 mejores zonas para esperar ahora, con los minutos de espera y lo que tardas en llegar.</li>
+      <li>Aviso con sonido cuando se calienta una zona cerca de ti y estás libre.</li>
       <li>El mapa de calor de la ciudad a esta hora.</li>
       <li>Dónde se quedó gente sin taxi, para que no se pierdan esas carreras.</li>
+      <li>Viajes largos primero: ves las reservas a Kuélap, Gocta o Leymebamba antes de que se asignen y levantas la mano.</li>
+      <li>Mi caja completa: tu historia día por día, tus mejores horas, los kilómetros que manejas vacío y cuánto se te va en gasolina.</li>
       <li>La Caja Chasqui: luz de libre u ocupado, taxímetro con su propio GPS y botón de ayuda.</li>
     </ul>
     <p class="nota" id="plusAprendio"></p>
@@ -495,6 +520,28 @@ dialog.hojita .hojita-cuerpo{padding-top:18px}
   </div>
 </dialog>
 
+<dialog class="hojita" id="dMiCaja" aria-labelledby="tMiCaja">
+  <div class="hojita-cab"><h2 id="tMiCaja">Mi caja</h2><button class="x" data-cerrar aria-label="Cerrar">✕</button></div>
+  <div class="hojita-cuerpo">
+    <p class="nota">Tus números salen de tus viajes y del GPS de tu celular (o de tu Caja Chasqui) mientras estás conectado. Solo los ves tú y la central.</p>
+    <h3 class="sub" style="margin-top:4px">Hoy</h3>
+    <div class="tablero">
+      <div><span class="lbl">Ganado</span><span class="num" id="cjSoles">S/0</span></div>
+      <div><span class="lbl">Viajes</span><span class="num" id="cjViajes">0</span></div>
+      <div><span class="lbl">Conectado</span><span class="num" id="cjHoras">0 h</span></div>
+    </div>
+    <p style="margin:0" id="cjKmTexto"></p>
+    <div class="km-barra" id="cjBarra" aria-hidden="true"></div>
+    <p class="km-ley"><span><i style="background:var(--arcilla)"></i>buscando pasajero</span><span><i style="background:var(--neblina)"></i>yendo a recoger</span><span><i style="background:var(--accent)"></i>con pasajero</span></p>
+    <div class="gasolina">
+      <div><label class="campo" for="cjRinde">Tu carro hace (km por galón)</label><input type="number" id="cjRinde" min="10" max="80" step="1" inputmode="numeric"></div>
+      <div><label class="campo" for="cjPrecio">El galón cuesta (S/)</label><input type="number" id="cjPrecio" min="5" max="40" step="0.1" inputmode="decimal"></div>
+    </div>
+    <p id="cjGasolina" style="margin-top:8px"></p>
+    <div id="cjPlus"></div>
+  </div>
+</dialog>
+
 <dialog class="hojita" id="dViajes" aria-labelledby="tViajes">
   <div class="hojita-cab"><h2 id="tViajes">Mis viajes</h2><button class="x" data-cerrar aria-label="Cerrar">✕</button></div>
   <div class="hojita-cuerpo"><ul class="lista-viajes" id="listaViajes"></ul></div>
@@ -504,6 +551,9 @@ dialog.hojita .hojita-cuerpo{padding-top:18px}
   <div class="hojita-cab"><h2 id="tReservas">Viajes largos</h2><button class="x" data-cerrar aria-label="Cerrar">✕</button></div>
   <div class="hojita-cuerpo">
     <p class="nota" id="resAutorizacion"></p>
+    <h3 class="sub" style="margin-top:4px">Por asignar</h3>
+    <div id="resAbiertas"></div>
+    <h3 class="sub">Mis viajes largos</h3>
     <ul class="lista-viajes" id="listaReservas"></ul>
   </div>
 </dialog>
@@ -2425,6 +2475,17 @@ ${rueda(e1)}${rueda(e2)}
       o.connect(g).connect(audio.destination); o.start(t0 + d); o.stop(t0 + d + 0.22);
     });
   }
+  function campanita() {   // aviso suave (zona caliente): dos notas y una vibración corta
+    try { navigator.vibrate && navigator.vibrate([120, 80, 120]); } catch {}
+    if (!audio) return;
+    const t0 = audio.currentTime;
+    [0, 0.18].forEach((d, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'sine'; o.frequency.value = [880, 1175][i];
+      g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.25, t0 + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.35);
+      o.connect(g).connect(audio.destination); o.start(t0 + d); o.stop(t0 + d + 0.36);
+    });
+  }
   let candado = null;
   async function pantallaPrendida(si) {
     try {
@@ -2543,6 +2604,20 @@ ${rueda(e1)}${rueda(e2)}
       st.top3.push(z); if (st.top3.length === 3) break;
     }
     pintarSugerencia(); mapa.redibujar();
+    avisarZonaCaliente();
+  }
+  /* Plus: si estás libre y cerca se calienta una zona (poca espera, a pocos minutos), suena una campanita.
+     No insiste: la misma zona avisa como mucho cada 30 min, y otra zona cada 12 min. */
+  let ultimaAlerta = { t: 0, lat: 0, lon: 0 };
+  function avisarZonaCaliente() {
+    const m = st.modelo, z = st.top3[0];
+    if (!m || !m.plus || !z || !st.conectado || st.viajes.length) return;
+    if (z.ir_min < 1 || z.ir_min > 6 || z.espera_min > 5) return;   // ya estás ahí, o no vale la pena moverse
+    const misma = Math.abs(z.lat - ultimaAlerta.lat) < 0.004 && Math.abs(z.lon - ultimaAlerta.lon) < 0.004;
+    if (Date.now() - ultimaAlerta.t < (misma ? 30 : 12) * 60000) return;
+    ultimaAlerta = { t: Date.now(), lat: z.lat, lon: z.lon };
+    campanita();
+    aviso('Zona caliente a ' + Math.round(z.ir_min) + ' min: ' + D.calleCorta(D.direccion(grafo.cercano(z.lat, z.lon))) + ' · unos ' + Math.max(1, Math.round(z.espera_min)) + ' min de espera', 8000);
   }
   const textoAprendio = m => !m ? '' : m.acierto
     ? 'Aprendido de ' + m.aprendido + ' pedidos de la ciudad. La última semana, ' + Math.round(10 * m.acierto.en_top / m.acierto.pedidos) + ' de cada 10 pedidos salieron en las zonas que marcó.'
@@ -3054,6 +3129,7 @@ ${rueda(e1)}${rueda(e2)}
       : 'Te tocan viajes largos dentro de la provincia (Huancas, Levanto, Leymebamba). Para Kuélap, Gocta u otras provincias hace falta autorización turística o interprovincial; consúltalo con la central.';
     const ul = $('listaReservas'); ul.replaceChildren();
     abrir('dReservas');
+    pintarReservasAbiertas();
     const [{ data: rs }, { data: ds }] = await Promise.all([
       sb.from('reservas').select('*').eq('taxista_id', st.yo).in('estado', ['confirmada', 'completada']).order('fecha_hora').limit(30),
       sb.from('destinos_largos').select('id,nombre'),
@@ -3079,6 +3155,128 @@ ${rueda(e1)}${rueda(e2)}
       ul.append(li);
     }
   });
+  /* ---------- viajes largos por asignar: con Plus se ven y se levanta la mano (supabase/021) ---------- */
+  async function pintarReservasAbiertas() {
+    const caja = $('resAbiertas'), el = (tag, props, ...h) => { const e = Object.assign(document.createElement(tag), props); e.append(...h); return e; };
+    caja.replaceChildren(el('p', { className: 'nota', textContent: 'Buscando…' }));
+    const { data, error } = await sb.rpc('reservas_abiertas');
+    if (error || !data) { caja.replaceChildren(el('p', { className: 'nota', textContent: 'No se pudo ver ahora. Revisa tu señal.' })); return; }
+    if (!data.plus) {
+      const b = el('button', { type: 'button', className: 'boton-plus', textContent: 'Ver qué es Chasqui Plus' });
+      b.addEventListener('click', () => { $('dReservas').close(); abrirPlus(); });
+      caja.replaceChildren(el('div', { className: 'candado' }, el('span', { className: 'plus-tag', textContent: 'Plus' }),
+        data.n ? 'Ahora hay ' + data.n + ' viaje' + (data.n === 1 ? '' : 's') + ' largo' + (data.n === 1 ? '' : 's') + ' por asignar, que suman S/ ' + Number(data.soles).toFixed(0) + '. '
+               : 'Cuando un pasajero reserve un viaje largo, aquí aparece. ',
+        'Con Chasqui Plus los ves antes de que la central los asigne y levantas la mano.', el('br'), b));
+      return;
+    }
+    if (!data.reservas.length) { caja.replaceChildren(el('p', { className: 'nota', textContent: 'Ahora no hay viajes largos por asignar. Cuando un pasajero reserve uno, aparece aquí.' })); return; }
+    const ul = el('ul', { className: 'lista-viajes' });
+    for (const r of data.reservas) {
+      const b = el('button', { type: 'button', className: 'secundario' });
+      const pintarBoton = () => { b.textContent = r.yo ? '✓ Levantaste la mano' : 'Me interesa'; b.setAttribute('aria-pressed', String(r.yo)); };
+      pintarBoton();
+      if (!r.puedo) { b.disabled = true; b.textContent = 'Necesitas autorización interprovincial'; }
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        const { error: e } = await sb.rpc('interes_reserva', { p_reserva: r.id, p_si: !r.yo });
+        b.disabled = false;
+        if (e) { aviso(e.message || 'No se pudo'); return; }
+        r.yo = !r.yo; r.interesados += r.yo ? 1 : -1; pintarBoton(); otros.textContent = textoOtros();
+        aviso(r.yo ? 'Listo: la central sabe que quieres este viaje' : 'Bajaste la mano');
+      });
+      const textoOtros = () => r.interesados > (r.yo ? 1 : 0) ? ' · ' + (r.interesados - (r.yo ? 1 : 0)) + ' más lo quieren' : '';
+      const otros = el('span', { textContent: textoOtros() });
+      ul.append(el('li', {}, el('b', { textContent: 'S/ ' + Number(r.precio).toFixed(0) }), r.destino,
+        el('small', { textContent: new Date(r.fecha_hora).toLocaleString('es-PE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) +
+          ' · ' + r.personas + ' pers. · ' + (r.ida_vuelta ? 'ida y vuelta' : 'solo ida') + (r.dentro_provincia ? '' : ' · fuera de la provincia') }, otros),
+        el('div', { className: 'res-abierta' }, b)));
+    }
+    caja.replaceChildren(ul, el('p', { className: 'nota', style: 'margin-top:8px', textContent: 'La central elige entre los que levantan la mano y te avisa.' }));
+  }
+
+  /* ---------- Mi caja: lo que gano y lo que gasto (supabase/021, mi_caja) ---------- */
+  const leerNum = (k, def) => { try { const v = Number(localStorage.getItem(k)); return v > 0 ? v : def; } catch { return def; } };
+  const guardarNum = (k, v) => { try { localStorage.setItem(k, String(v)); } catch {} };
+  let ultimaCaja = null;
+  function ponerGasolina() {
+    if (!$('cjRinde').value) $('cjRinde').value = leerNum('chasqui.kmPorGalon', 35);
+    if (!$('cjPrecio').value) $('cjPrecio').value = leerNum('chasqui.precioGalon', 17.5);
+  }
+  async function abrirMiCaja() {
+    ponerGasolina();
+    abrir('dMiCaja');
+    $('cjPlus').replaceChildren();
+    const { data, error } = await sb.rpc('mi_caja', { p_dias: 30 });
+    if (error || !data) { aviso('No se pudo leer tu caja. Revisa tu señal.'); return; }
+    ultimaCaja = data; pintarMiCaja();
+  }
+  const kmTotal = d => Number(d.km_libre) + Number(d.km_recoger) + Number(d.km_pasajero);
+  const horasTxt = min => min < 60 ? min + ' min' : (min / 60).toFixed(min < 600 ? 1 : 0).replace('.', ',') + ' h';
+  function pintarMiCaja() {
+    const d = ultimaCaja, hoy = d.hoy, el = (tag, props, ...h) => { const e = Object.assign(document.createElement(tag), props); e.append(...h); return e; };
+    const rinde = Number($('cjRinde').value) || 35, precio = Number($('cjPrecio').value) || 17.5, porKm = precio / rinde;
+    $('cjSoles').textContent = 'S/' + Number(hoy.soles).toFixed(Number(hoy.soles) % 1 ? 1 : 0);
+    $('cjViajes').textContent = hoy.viajes;
+    $('cjHoras').textContent = horasTxt(hoy.min_conectado);
+    const total = kmTotal(hoy);
+    const barra = $('cjBarra'); barra.replaceChildren();
+    if (total > 0.05) {
+      for (const [k, c] of [['km_libre', 'libre'], ['km_recoger', 'recoger'], ['km_pasajero', 'pasajero']]) barra.append(el('span', { className: c, style: 'width:' + (100 * hoy[k] / total) + '%' }));
+      const vacio = Number(hoy.km_libre) + Number(hoy.km_recoger);
+      $('cjKmTexto').textContent = 'Manejaste ' + total.toFixed(1).replace('.', ',') + ' km: de cada 10 km, ' + Math.round(10 * vacio / total) + ' fueron sin pasajero.';
+    } else $('cjKmTexto').textContent = 'Todavía no hay kilómetros de hoy. Se cuentan mientras estás conectado.';
+    const gas = total * porKm, neto = Number(hoy.soles) - gas;
+    $('cjGasolina').textContent = total > 0.05
+      ? 'Gasolina de hoy: unos S/ ' + gas.toFixed(2) + ' (S/ ' + (Number(hoy.km_libre) * porKm).toFixed(2) + ' dando vueltas sin pasajero). Te queda unos S/ ' + neto.toFixed(2) + '.'
+      : 'Con tu rendimiento y el precio del galón, aquí verás cuánto se va en gasolina y cuánto te queda.';
+    const plus = $('cjPlus'); plus.replaceChildren();
+    if (!d.plus) {
+      const b = el('button', { type: 'button', className: 'boton-plus', textContent: 'Ver qué es Chasqui Plus' });
+      b.addEventListener('click', () => { $('dMiCaja').close(); abrirPlus(); });
+      plus.append(el('div', { className: 'candado' }, el('span', { className: 'plus-tag', textContent: 'Plus' }),
+        'Con Chasqui Plus ves tu historia día por día' + (d.dias_guardados > 1 ? ' (ya tienes ' + d.dias_guardados + ' días guardados)' : '') +
+        ', tus mejores horas para trabajar y cómo te va frente al promedio de la ciudad.', el('br'), b));
+      return;
+    }
+    // las mejores horas: soles por hora del día, 30 días
+    const horas = new Array(24).fill(0); for (const x of d.horas || []) horas[x.hora] = Number(x.soles);
+    const max = Math.max(...horas), top = [...horas.keys()].filter(h => horas[h] > 0).sort((a, b) => horas[b] - horas[a]).slice(0, 3);
+    if (max > 0) {
+      const g = el('div', { className: 'horas', role: 'img', ariaLabel: 'Soles por hora del día en los últimos 30 días' });
+      horas.forEach((v, h) => g.append(el('span', { className: top.includes(h) ? 'top' : '', style: 'height:' + (100 * v / max) + '%', title: h + ':00 · S/ ' + v.toFixed(0) })));
+      plus.append(el('h3', { className: 'sub', textContent: 'Tus mejores horas' }),
+        el('p', { className: 'nota', textContent: 'Lo que ganaste en cada hora del día, los últimos 30 días. Las mejores: ' + top.sort((a, b) => a - b).map(h => h + ':00').join(', ') + '.' }),
+        g, el('div', { className: 'horas-eje' }, el('span', { textContent: '0 h' }), el('span', { textContent: '6 h' }), el('span', { textContent: '12 h' }), el('span', { textContent: '18 h' })));
+    }
+    if (d.ciudad && d.ciudad.soles_hora) {
+      const mios = (d.dias || []).reduce((s, x) => [s[0] + Number(x.soles), s[1] + x.min_conectado], [0, 0]);
+      const mio = mios[1] > 30 ? mios[0] / (mios[1] / 60) : null;
+      plus.append(el('p', { textContent: 'En la ciudad, un chasqui gana en promedio S/ ' + Number(d.ciudad.soles_hora).toFixed(2) + ' por hora conectado' +
+        (mio ? '; tú, S/ ' + mio.toFixed(2) + '.' : '.') }));
+    }
+    const dias = d.dias || [];
+    if (dias.length) {
+      const filas = dias.slice(0, 30).map(x => {
+        const km = kmTotal(x), h = x.min_conectado / 60;
+        return el('tr', {}, el('td', { textContent: new Date(x.dia + 'T12:00:00').toLocaleDateString('es-PE', { weekday: 'short', day: 'numeric', month: 'short' }) }),
+          el('td', { textContent: x.viajes }), el('td', { textContent: 'S/' + Number(x.soles).toFixed(0) }),
+          el('td', { textContent: km ? km.toFixed(0) + ' km' : '—' }), el('td', { textContent: km ? Math.round(100 * (Number(x.km_libre) + Number(x.km_recoger)) / km) + '%' : '—' }),
+          el('td', { textContent: h >= 0.5 ? 'S/' + (Number(x.soles) / h).toFixed(1) : '—' }));
+      });
+      const sem = dias.filter(x => (new Date() - new Date(x.dia + 'T12:00:00')) < 7 * 86400000);
+      const tSem = sem.reduce((s, x) => s + Number(x.soles), 0), kmSem = sem.reduce((s, x) => s + kmTotal(x), 0);
+      plus.append(el('h3', { className: 'sub', textContent: 'Día por día' }),
+        el('p', { textContent: 'Últimos 7 días: S/ ' + tSem.toFixed(0) + ' ganados, ' + kmSem.toFixed(0) + ' km, unos S/ ' + (kmSem * porKm).toFixed(0) + ' en gasolina.' }),
+        el('div', { style: 'overflow-x:auto' }, el('table', { className: 'dias' },
+          el('thead', {}, el('tr', {}, ...['Día', 'Viajes', 'Ganado', 'Km', 'Vacío', 'Por hora'].map(t => el('th', { textContent: t })))), el('tbody', {}, ...filas))));
+    }
+  }
+  $('mMiCaja').addEventListener('click', () => { $('dMenu').close(); abrirMiCaja(); });
+  for (const [id, k] of [['cjRinde', 'chasqui.kmPorGalon'], ['cjPrecio', 'chasqui.precioGalon']]) {
+    $(id).addEventListener('input', () => { const v = Number($(id).value); if (v > 0) guardarNum(k, v); if (ultimaCaja) pintarMiCaja(); });
+  }
+
   async function pintarPagos() {
     const t = st.taxista;
     $('memEstado').textContent = !t ? '' : !t.membresia_hasta ? 'Estás en el periodo de prueba del piloto: no pagas por ahora.'
@@ -3159,7 +3357,8 @@ ${rueda(e1)}${rueda(e2)}
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
   // Para pruebas sin salir a la calle: __app.gpsFalso(lat, lon) mueve el taxi en el mapa.
-  globalThis.__app = { st, mapa, grafo, sb, revisar, conectar, pintarSugerencia, abrirPlus, mostrarEsCentral, gpsFalso: (la, lo) => nuevaPos([la, lo], 'prueba') };
+  globalThis.__app = { st, mapa, grafo, sb, revisar, conectar, pintarSugerencia, abrirPlus, mostrarEsCentral, gpsFalso: (la, lo) => nuevaPos([la, lo], 'prueba'),
+    miCaja: d => { ultimaCaja = d; ponerGasolina(); abrir('dMiCaja'); pintarMiCaja(); } };
   arrancar();
 })();
 </script>

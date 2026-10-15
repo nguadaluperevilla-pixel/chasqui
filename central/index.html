@@ -125,6 +125,9 @@ td input[type=number]{width:90px}
 .enlace{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:inherit}
 .clave-temp{margin-top:8px;background:var(--soft-arcilla);border-radius:10px;padding:10px 12px;font-size:15px}
 .clave-temp b{font-family:ui-monospace,Consolas,monospace;font-size:22px;letter-spacing:.12em;user-select:all}
+.manos{background:var(--soft-accent);border-radius:12px;padding:10px 12px;margin-top:6px;display:grid;gap:6px;font-size:14px}
+.manos .mano{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.manos .mano span{min-width:0;overflow-wrap:anywhere}
 .cu-opciones{display:grid;gap:8px}
 .cu-opciones .btn{text-align:left}
 .cu-opciones .btn[aria-pressed="true"]{background:var(--soft-accent);border-color:var(--accent);color:var(--accent)}
@@ -2418,7 +2421,7 @@ ${rueda(e1)}${rueda(e2)}
   function pedirCarga() { if (!tCarga) tCarga = setTimeout(() => { tCarga = 0; cargarTodo(); }, 3000); }
   async function cargarTodo() {
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    const [tx, ub, vj, pg, rs, al, ds, tf, ad] = await Promise.all([
+    const [tx, ub, vj, pg, rs, al, ds, tf, ad, ri] = await Promise.all([
       sb.from('taxistas').select('*, perfiles(nombre, telefono, rol)').order('creado', { ascending: false }),
       Promise.resolve(null),   // las ubicaciones van aparte (cargarUbic), que con 1000 taxis pesan
       sb.from('viajes').select('*').gte('creado', hoy.toISOString()).order('creado', { ascending: false }),
@@ -2428,7 +2431,9 @@ ${rueda(e1)}${rueda(e2)}
       sb.from('destinos_largos').select('*').order('orden'),
       sb.from('tarifas').select('*').eq('activa', true).limit(1),
       sb.from('perfiles').select('id, nombre, telefono').eq('rol', 'admin'),
+      sb.from('reservas_interes').select('reserva_id, taxista_id, creado').order('creado'),   // los Plus que levantaron la mano
     ]);
+    st.interes = ri.data || [];
     st.taxistas = tx.data || []; void ub;
     st.viajes = vj.data || []; st.alertas = al.data || [];
     pintarVivo(); pintarTaxistas(); pintarPagos(pg.data || []); pintarReservas(rs.data || []); pintarAlertas(); pintarPrecios(ds.data || [], (tf.data || [])[0]); pintarEquipo(ad.data || []);
@@ -2594,6 +2599,19 @@ ${rueda(e1)}${rueda(e2)}
       const asignar = el('button', { className: 'btn si', textContent: r.taxista_id ? 'Cambiar chofer' : 'Asignar' });
       asignar.addEventListener('click', () => { if (!sel.value) { aviso('Elige un chofer'); return; } rpc('admin_asignar_reserva', { p_reserva: r.id, p_taxista: sel.value }, 'Asignado. Avísale al pasajero por celular.'); });
       card.querySelector('.acciones').append(sel, asignar);
+      // los chasquis Plus que levantaron la mano para este viaje: se asignan con un toque
+      const manos = r.estado === 'pendiente' ? (st.interes || []).filter(i => i.reserva_id === r.id) : [];
+      if (manos.length) {
+        const caja = el('div', { className: 'manos' }, el('b', { textContent: 'Levantaron la mano (Plus):' }));
+        for (const i of manos) {
+          const t = st.taxistas.find(x => x.id === i.taxista_id); if (!t) continue;
+          const b = el('button', { className: 'btn', type: 'button', textContent: 'Asignar' });
+          b.addEventListener('click', () => rpc('admin_asignar_reserva', { p_reserva: r.id, p_taxista: t.id }, 'Asignado. Avísale al pasajero por celular.'));
+          caja.append(el('div', { className: 'mano' }, el('span', { textContent: ((t.perfiles && t.perfiles.nombre) || '') + ' · ' + t.placa +
+            (t.calificacion ? ' · ★ ' + Number(t.calificacion).toFixed(1) : '') + ' · ' + (t.viajes_total || 0) + ' viajes · ' + hace(i.creado) }), b));
+        }
+        card.insertBefore(caja, card.querySelector('.acciones'));
+      }
       if (r.estado === 'confirmada') { const h = el('button', { className: 'btn', textContent: 'Marcar como hecho' }); h.addEventListener('click', () => rpc('completar_reserva', { p_reserva: r.id }, 'Marcado como hecho')); card.querySelector('.acciones').append(h); }
       return card;
     };
@@ -2757,6 +2775,7 @@ ${rueda(e1)}${rueda(e2)}
       .on('postgres_changes', { event: '*', schema: 'public', table: 'taxistas' }, pedirCarga)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos_membresia' }, pedirCarga)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas' }, pedirCarga)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas_interes' }, pedirCarga)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, pedirCarga)
       .subscribe();
     await cargarUbic(true);   // y prende el tiempo real de posiciones si son pocos taxis
